@@ -1057,7 +1057,7 @@ class AIImageGenerator:
 
 def create_ai_directed_video(song_query, api_key=None, output_dir="output"):
     """Main function to create an AI-directed lyric video"""
-    from lyric_video_generator import search_song, download_audio, get_lyrics_with_timestamps
+    from lib.song_utils import search_song, download_audio, get_lyrics_with_timestamps
     
     # Create output directories
     os.makedirs(output_dir, exist_ok=True)

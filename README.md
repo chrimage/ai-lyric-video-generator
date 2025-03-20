@@ -49,6 +49,13 @@ Assemble final video from existing assets:
 python video_assembler.py --timeline TIMELINE.json --audio AUDIO.mp3 --output OUTPUT.mp4
 ```
 
+### Quick Demo
+
+Run the demo script to generate a sample lyric video:
+```bash
+python demo.py
+```
+
 ### Command-line options
 
 ```
@@ -57,9 +64,27 @@ python video_assembler.py --timeline TIMELINE.json --audio AUDIO.mp3 --output OU
 --help               Show help message and exit
 ```
 
-## Output Structure
+## Project Structure
 
-The program creates a well-organized directory structure:
+### Directory Structure
+
+The main components of this project are:
+
+```
+ai-lyric-video-generator/
+├── main.py                  # Main entry point for the application
+├── lyrics_segmenter.py      # Processes lyrics data to create segmented timeline
+├── ai_image_generator.py    # Creates AI-generated images for lyric segments
+├── video_assembler.py       # Assembles the final video with images and audio
+├── lib/                     # Utility libraries
+│   └── song_utils.py        # Core utilities for song search and lyrics retrieval
+├── demo.py                  # Quick demo script
+└── examples/                # Example scripts demonstrating individual components
+```
+
+### Output Structure
+
+The program creates a well-organized output directory structure:
 ```
 output/
   └── Artist/
