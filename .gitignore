@@ -1,0 +1,67 @@
+# Environment and settings
+.env
+*.ini
+config.json
+secrets.json
+.DS_Store
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Media files and project output
+*.mp3
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wav
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+
+# Log files
+*.log
+logs/
+output/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
+.history/
+
+# OS-specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
