@@ -78,39 +78,41 @@ def create_video_from_timeline(timeline: LyricsTimeline, audio_path: str, output
             new_w = int(current_w * scale_factor)
             new_h = int(current_h * scale_factor)
             
-            # Resize the clip using the most basic parameters to avoid ANTIALIAS issues
+            # Get PIL resampling filter based on what's available
+            def get_pil_resample_filter():
+                """Get the best available resampling filter in the current PIL version"""
+                # Check for Resampling enum (PIL 9.0+)
+                if hasattr(Image, 'Resampling') and hasattr(Image.Resampling, 'LANCZOS'):
+                    return Image.Resampling.LANCZOS
+                # Check for LANCZOS constant (PIL 7.0+)
+                elif hasattr(Image, 'LANCZOS'):
+                    return Image.LANCZOS
+                # Check for ANTIALIAS (older PIL versions)
+                elif hasattr(Image, 'ANTIALIAS'):
+                    return Image.ANTIALIAS
+                # Fallback to BICUBIC which should always be available
+                else:
+                    return Image.BICUBIC
+            
+            # Resize using PIL directly to avoid moviepy resize issues
             try:
-                # Try the simplest resize to avoid ANTIALIAS issues
-                img_clip = img_clip.resize(newsize=(new_w, new_h))
+                # Get the best available resampling filter
+                resample_filter = get_pil_resample_filter()
+                
+                # Resize with PIL
+                pil_img_resized = pil_img.resize((new_w, new_h), resample_filter)
+                
+                # Create a new clip from the resized image
+                img_array_resized = np.array(pil_img_resized)
+                img_clip = ImageClip(img_array_resized)
             except Exception as resize_error:
-                print(f"Error with primary resize method: {resize_error}")
+                print(f"Error with PIL resize method: {resize_error}")
+                # Ultimate fallback: use moviepy resize with no parameters
                 try:
-                    # Fallback method using manual resizing with PIL before creating ImageClip
-                    from PIL import Image
-                    # Resize with PIL using Resampling.LANCZOS (replacement for ANTIALIAS)
-                    # Get the original PIL image
-                    pil_img_resized = pil_img
-                    try:
-                        # Try with the newer Resampling enum first (PIL 9.0+)
-                        from PIL import Image
-                        pil_img_resized = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                    except (ImportError, AttributeError):
-                        try:
-                            # Try with the older LANCZOS constant (PIL 7.0+)
-                            pil_img_resized = pil_img.resize((new_w, new_h), Image.LANCZOS)
-                        except (ImportError, AttributeError):
-                            # Last resort: use BICUBIC which is widely supported
-                            pil_img_resized = pil_img.resize((new_w, new_h), Image.BICUBIC)
-                    
-                    # Create a new clip from the resized image
-                    img_array_resized = np.array(pil_img_resized)
-                    img_clip = ImageClip(img_array_resized)
-                    print(f"Used PIL fallback resize for segment {i+1}")
-                except Exception as pil_error:
-                    print(f"Error with PIL resize fallback: {pil_error}")
-                    # Ultimate fallback: use resize with no parameters
+                    img_clip = img_clip.resize(newsize=(new_w, new_h))
+                except:
                     img_clip = img_clip.resize(height=new_h)
-                    print(f"Used basic resize fallback for segment {i+1}")
+                print(f"Used basic moviepy resize fallback for segment {i+1}")
             
             # Set the position to center the image on top of the black background
             img_clip = img_clip.set_position("center")
@@ -248,39 +250,41 @@ def create_video_from_timeline(timeline: LyricsTimeline, audio_path: str, output
                             new_w = int(current_w * scale_factor)
                             new_h = int(current_h * scale_factor)
                             
-                            # Resize the clip using the most basic parameters to avoid ANTIALIAS issues
+                            # Get PIL resampling filter based on what's available
+                            def get_pil_resample_filter():
+                                """Get the best available resampling filter in the current PIL version"""
+                                # Check for Resampling enum (PIL 9.0+)
+                                if hasattr(Image, 'Resampling') and hasattr(Image.Resampling, 'LANCZOS'):
+                                    return Image.Resampling.LANCZOS
+                                # Check for LANCZOS constant (PIL 7.0+)
+                                elif hasattr(Image, 'LANCZOS'):
+                                    return Image.LANCZOS
+                                # Check for ANTIALIAS (older PIL versions)
+                                elif hasattr(Image, 'ANTIALIAS'):
+                                    return Image.ANTIALIAS
+                                # Fallback to BICUBIC which should always be available
+                                else:
+                                    return Image.BICUBIC
+                            
+                            # Resize using PIL directly to avoid moviepy resize issues
                             try:
-                                # Try the simplest resize to avoid ANTIALIAS issues
-                                img_clip = img_clip.resize(newsize=(new_w, new_h))
+                                # Get the best available resampling filter
+                                resample_filter = get_pil_resample_filter()
+                                
+                                # Resize with PIL
+                                pil_img_resized = pil_img.resize((new_w, new_h), resample_filter)
+                                
+                                # Create a new clip from the resized image
+                                img_array_resized = np.array(pil_img_resized)
+                                img_clip = ImageClip(img_array_resized)
                             except Exception as resize_error:
-                                print(f"Error with primary resize method in emergency mode: {resize_error}")
+                                print(f"Error with PIL resize method in emergency mode: {resize_error}")
+                                # Ultimate fallback: use moviepy resize with no parameters
                                 try:
-                                    # Fallback method using manual resizing with PIL before creating ImageClip
-                                    from PIL import Image
-                                    # Resize with PIL using Resampling.LANCZOS (replacement for ANTIALIAS)
-                                    # Get the original PIL image
-                                    pil_img_resized = pil_img
-                                    try:
-                                        # Try with the newer Resampling enum first (PIL 9.0+)
-                                        from PIL import Image
-                                        pil_img_resized = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                                    except (ImportError, AttributeError):
-                                        try:
-                                            # Try with the older LANCZOS constant (PIL 7.0+)
-                                            pil_img_resized = pil_img.resize((new_w, new_h), Image.LANCZOS)
-                                        except (ImportError, AttributeError):
-                                            # Last resort: use BICUBIC which is widely supported
-                                            pil_img_resized = pil_img.resize((new_w, new_h), Image.BICUBIC)
-                                    
-                                    # Create a new clip from the resized image
-                                    img_array_resized = np.array(pil_img_resized)
-                                    img_clip = ImageClip(img_array_resized)
-                                    print(f"Used PIL fallback resize for segment {i+1} in emergency mode")
-                                except Exception as pil_error:
-                                    print(f"Error with PIL resize fallback in emergency mode: {pil_error}")
-                                    # Ultimate fallback: use resize with no parameters
+                                    img_clip = img_clip.resize(newsize=(new_w, new_h))
+                                except:
                                     img_clip = img_clip.resize(height=new_h)
-                                    print(f"Used basic resize fallback for segment {i+1} in emergency mode")
+                                print(f"Used basic moviepy resize fallback for segment {i+1} in emergency mode")
                             
                             # Center the image
                             img_clip = img_clip.set_position("center")
