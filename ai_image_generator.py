@@ -1658,7 +1658,6 @@ def create_ai_directed_video(song_query, api_key=None, output_dir="output"):
     print(f"Searching for: {song_query}...")
     # If we already have song info, don't search again
     if os.path.exists(os.path.join(output_dir, "video_info.json")):
-        import json
         try:
             with open(os.path.join(output_dir, "video_info.json"), "r") as f:
                 video_info = json.load(f)
