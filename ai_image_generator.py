@@ -1656,7 +1656,25 @@ def create_ai_directed_video(song_query, api_key=None, output_dir="output"):
     
     # Step 1: Search for song and get lyrics
     print(f"Searching for: {song_query}...")
-    song_info = search_song(song_query)
+    # If we already have song info, don't search again
+    if os.path.exists(os.path.join(output_dir, "video_info.json")):
+        import json
+        try:
+            with open(os.path.join(output_dir, "video_info.json"), "r") as f:
+                video_info = json.load(f)
+                song_info = {
+                    'videoId': video_info.get('video_id'),
+                    'title': video_info.get('title'),
+                    'artists': video_info.get('artists'),
+                    'original_query': video_info.get('query')
+                }
+                print(f"Using existing song info from {output_dir}/video_info.json")
+        except Exception as e:
+            print(f"Error loading existing song info: {e}")
+            print("Searching for song info...")
+            song_info = search_song(song_query)
+    else:
+        song_info = search_song(song_query)
     
     if not song_info:
         print("Song not found. Cannot create lyric video.")
@@ -1665,15 +1683,29 @@ def create_ai_directed_video(song_query, api_key=None, output_dir="output"):
     video_id = song_info['videoId']
     print(f"Found: {song_info['title']} by {', '.join(song_info['artists'])}")
     
-    # Step 2: Download audio
-    print(f"Downloading audio...")
-    # Save the audio directly to the song-specific output directory
-    audio_path = download_audio(video_id, output_dir=output_dir)
+    # Step 2: Download audio (only if it doesn't exist)
+    audio_path = None
+    for file in os.listdir(output_dir):
+        if file.endswith(".mp3"):
+            audio_path = os.path.join(output_dir, file)
+            print(f"Using existing audio file: {audio_path}")
+            break
     
-    # Step 3: Get lyrics with timestamps
-    print("Retrieving lyrics with timestamps...")
-    expected_title = song_info['title']
-    lyrics_data = get_lyrics_with_timestamps(video_id, expected_title=expected_title)
+    if not audio_path:
+        print(f"Downloading audio...")
+        # Save the audio directly to the song-specific output directory
+        audio_path = download_audio(video_id, output_dir=output_dir)
+    
+    # Step 3: Get lyrics with timestamps (only if we don't have a timeline file)
+    if os.path.exists(os.path.join(output_dir, "timeline_raw.json")):
+        print("Using existing timeline with lyrics")
+        from lyrics_segmenter import LyricsTimeline
+        timeline = LyricsTimeline.load_from_file(os.path.join(output_dir, "timeline_raw.json"))
+        lyrics_data = True  # Just a placeholder to indicate we have lyrics
+    else:
+        print("Retrieving lyrics with timestamps...")
+        expected_title = song_info['title']
+        lyrics_data = get_lyrics_with_timestamps(video_id, expected_title=expected_title)
     
     if not lyrics_data:
         print("Failed to retrieve lyrics. Cannot create lyric video.")
