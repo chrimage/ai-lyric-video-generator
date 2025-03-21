@@ -163,15 +163,11 @@ def create_lyric_video(
         else:
             raise FileNotFoundError(f"Cannot find any existing assets in {output_dir}. Run without skip_to_step first.")
     else:
-        # Create temporary song directory based on search query
-        temp_dir = create_song_directory(song_query, output_dir)
-        print(f"Working in temporary directory: {temp_dir}")
-        
         # Step 1: Generate AI-directed video assets
         print(f"=== STEP 1: GENERATING AI-DIRECTED VIDEO ASSETS ===")
         
-        # First, search for the song to get accurate metadata
-        from lib.song_utils import search_song
+        # First, just search for the song to get accurate metadata
+        from lib.song_utils import search_song, check_lyrics_availability
         print(f"Searching for: {song_query}...")
         song_info = search_song(song_query)
         
@@ -179,36 +175,42 @@ def create_lyric_video(
             print("Song not found. Cannot create lyric video.")
             return None
             
-        # Now create the proper directory with the accurate information
-        final_song_dir = create_song_directory_from_info(song_info, output_dir)
-        print(f"Creating permanent directory: {final_song_dir}")
+        # Check if song has timestamped lyrics before creating directories
+        video_id = song_info['videoId']
+        print(f"Checking lyrics availability for: {song_info['title']} by {', '.join(song_info['artists'])}...")
+        lyrics_status = check_lyrics_availability(video_id)
         
-        # Generate assets in the proper directory
-        assets = create_ai_directed_video(song_query, api_key, final_song_dir)
+        # If no timestamped lyrics, abort early to avoid empty directories
+        if not lyrics_status['has_timestamps']:
+            print("\n" + "="*80)
+            print("❌ LYRICS CHECK FAILED: CANNOT CREATE LYRIC VIDEO")
+            print("="*80)
+            print(f"🎵 Song: {song_info['title']} by {', '.join(song_info['artists'])}")
+            print(f"ℹ️ Status: {lyrics_status['message']}")
+            print(f"⚠️ This application requires songs with timestamped lyrics.")
+            print("="*80)
+            print("\nTry a different song or a more popular version that might have timestamped lyrics.")
+            return None
+            
+        # Great! We have timestamped lyrics. Now create directory.
+        print("\n" + "="*80)
+        print("✅ LYRICS CHECK PASSED: TIMESTAMPED LYRICS AVAILABLE")
+        print("="*80)
+        print(f"🎵 Song: {song_info['title']} by {', '.join(song_info['artists'])}")
+        print(f"ℹ️ Status: {lyrics_status['message']}")
+        print("="*80 + "\n")
+        
+        # Create the song directory with the accurate information
+        song_dir = create_song_directory_from_info(song_info, output_dir)
+        print(f"Creating directory: {song_dir}")
+        
+        # Generate assets in the directory
+        assets = create_ai_directed_video(song_query, api_key, song_dir)
         
         if assets is None:
             print("Failed to generate AI-directed video assets - cannot proceed.")
             print("Try again with a different song or more specific query.")
             return None
-            
-        # Clean up the temporary directory if it's empty or delete it if user confirms
-        try:
-            if os.path.exists(temp_dir) and temp_dir != final_song_dir:
-                if len(os.listdir(temp_dir)) == 0:
-                    # Directory is empty, safe to remove
-                    os.rmdir(temp_dir)
-                    print(f"Removed empty temporary directory: {temp_dir}")
-                else:
-                    # Ask user if they want to remove non-empty directory
-                    response = input(f"Temporary directory {temp_dir} is not empty. Delete it? (y/n): ")
-                    if response.lower() == 'y':
-                        import shutil
-                        shutil.rmtree(temp_dir)
-                        print(f"Removed temporary directory: {temp_dir}")
-        except Exception as e:
-            print(f"Warning: Failed to clean up temporary directory: {e}")
-            
-        song_dir = final_song_dir
         goto_step2 = True
     
     # Step 2: Assemble the final video

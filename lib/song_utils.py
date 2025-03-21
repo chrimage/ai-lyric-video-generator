@@ -65,6 +65,73 @@ def download_audio(video_id, output_dir='downloads'):
     
     return f'{output_dir}/{video_id}.mp3'
 
+def check_lyrics_availability(video_id):
+    """
+    Check if timestamped lyrics are available for a song without downloading anything
+    
+    Args:
+        video_id: YouTube video ID for the song
+        
+    Returns:
+        dict with keys:
+        - has_lyrics: True if any lyrics are available
+        - has_timestamps: True if timestamped lyrics are available
+        - message: A string describing the lyrics status
+    """
+    result = {
+        'has_lyrics': False,
+        'has_timestamps': False,
+        'message': "Unknown lyrics status"
+    }
+    
+    ytmusic = YTMusic()
+    
+    # Get watch playlist to access lyrics
+    print(f"Checking lyrics availability for video ID: {video_id}")
+    try:
+        watch_playlist = ytmusic.get_watch_playlist(video_id)
+    except Exception as e:
+        result['message'] = f"Error checking lyrics: {type(e).__name__}: {str(e)}"
+        return result
+    
+    if not watch_playlist:
+        result['message'] = "Failed to get watch playlist"
+        return result
+    
+    # Check if lyrics exist at all
+    if 'lyrics' not in watch_playlist:
+        result['message'] = "No lyrics available for this song"
+        return result
+    
+    # We have lyrics entry
+    result['has_lyrics'] = True
+    
+    # Try to get the actual lyrics with timestamps to verify they work
+    lyrics_browse_id = watch_playlist['lyrics']
+    try:
+        # We'll first just try to get timestamps and peek at the structure
+        lyrics_data = ytmusic.get_lyrics(lyrics_browse_id, timestamps=True)
+        
+        # Now check if the timestamps actually exist
+        if lyrics_data and 'lyrics' in lyrics_data:
+            if isinstance(lyrics_data['lyrics'], list) and len(lyrics_data['lyrics']) > 0:
+                first_item = lyrics_data['lyrics'][0]
+                if hasattr(first_item, 'start_time') and hasattr(first_item, 'text'):
+                    result['has_timestamps'] = True
+                    result['message'] = "Timestamped lyrics are available"
+                else:
+                    result['message'] = "Lyrics exist but do not contain timestamps"
+            else:
+                result['message'] = "Lyrics exist but are in plain text format"
+        else:
+            result['message'] = "Lyrics entry exists but no actual lyrics content found"
+            
+    except Exception as e:
+        result['message'] = f"Error retrieving timestamps: {type(e).__name__}: {str(e)}"
+    
+    return result
+
+
 def get_lyrics_with_timestamps(video_id, expected_title=None):
     """Get lyrics with timestamps using ytmusicapi"""
     ytmusic = YTMusic()

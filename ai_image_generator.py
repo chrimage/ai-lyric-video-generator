@@ -1703,6 +1703,23 @@ def create_ai_directed_video(song_query, api_key=None, output_dir="output"):
         timeline = LyricsTimeline.load_from_file(os.path.join(output_dir, "timeline_raw.json"))
         lyrics_data = True  # Just a placeholder to indicate we have lyrics
     else:
+        # Check if the song has timestamped lyrics before trying to retrieve them
+        from lib.song_utils import check_lyrics_availability
+        print("Checking lyrics availability...")
+        lyrics_status = check_lyrics_availability(video_id)
+        
+        # If no timestamped lyrics, abort early 
+        if not lyrics_status['has_timestamps']:
+            print("\n" + "="*80)
+            print("❌ LYRICS CHECK FAILED: CANNOT CREATE LYRIC VIDEO")
+            print("="*80)
+            print(f"🎵 Song: {song_info['title']} by {', '.join(song_info['artists'])}")
+            print(f"ℹ️ Status: {lyrics_status['message']}")
+            print(f"⚠️ This application requires songs with timestamped lyrics.")
+            print("="*80)
+            return None
+            
+        # Great! We have timestamped lyrics
         print("Retrieving lyrics with timestamps...")
         expected_title = song_info['title']
         lyrics_data = get_lyrics_with_timestamps(video_id, expected_title=expected_title)
