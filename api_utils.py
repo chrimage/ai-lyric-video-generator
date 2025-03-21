@@ -51,6 +51,13 @@ def api_call_with_backoff(func: Callable, *args, max_retries: int = 5,
         "server error", "503", "502", "504", "network", "unavailable"
     ]
     
+    # Content filter or safety indicators
+    content_filter_indicators = [
+        "content filter", "filtered", "policy violation", "prohibited",
+        "unsafe content", "inappropriate", "moderation", "violates policies",
+        "blocked by safety", "safety settings", "safety system"
+    ]
+    
     while retries < max_retries:
         try:
             return func(*args, **kwargs)
@@ -68,6 +75,22 @@ def api_call_with_backoff(func: Callable, *args, max_retries: int = 5,
             
             # Check if this is a network or temporary error
             is_temporary = any(indicator in error_str for indicator in temporary_error_indicators)
+            
+            # Check if this is a content filter block
+            is_content_filtered = any(indicator in error_str for indicator in content_filter_indicators)
+            
+            # Special handling for content filter blocks
+            if is_content_filtered:
+                logger.warning(f"Content filter triggered: {error_type}: {error_str}")
+                print(f"Content filter blocked generation: {error_type}")
+                # Raise a specialized exception to communicate the content filter issue
+                # This allows calling code to detect this specific case
+                from types import SimpleNamespace
+                content_filter_error = SimpleNamespace()
+                content_filter_error.is_content_filtered = True
+                content_filter_error.original_error = e
+                content_filter_error.error_message = error_str
+                return content_filter_error
             
             # Determine if we should retry
             if is_rate_limit or is_temporary:
