@@ -64,6 +64,49 @@ def video_player(video_id):
     video = Video.query.get_or_404(video_id)
     return render_template('video_player.html', video=video)
 
+@main_bp.route('/video/<int:video_id>/creative-process')
+def creative_process(video_id):
+    """Display the creative process behind the video"""
+    video = Video.query.get_or_404(video_id)
+    
+    # Parse the creative process data
+    creative_data = video.get_creative_data()
+    
+    # Read the timeline data if available
+    timeline_data = None
+    if video.timeline_path and os.path.exists(os.path.join(current_app.config['BASE_DIR'], video.timeline_path)):
+        try:
+            with open(os.path.join(current_app.config['BASE_DIR'], video.timeline_path), 'r') as f:
+                timeline_data = json.load(f)
+        except Exception as e:
+            print(f"Error loading timeline data: {e}")
+    
+    # Get a list of image files from the images directory
+    image_files = []
+    if video.images_dir and os.path.exists(os.path.join(current_app.config['BASE_DIR'], video.images_dir)):
+        for filename in os.listdir(os.path.join(current_app.config['BASE_DIR'], video.images_dir)):
+            if filename.endswith(('.png', '.jpg', '.jpeg')):
+                # Sort the images by their sequence number if available
+                try:
+                    # Extract sequence number from filenames like "001_lyrics.png"
+                    seq_num = int(filename.split('_')[0])
+                    image_files.append((seq_num, filename))
+                except:
+                    # Fallback if no sequence number
+                    image_files.append((999, filename))
+        
+        # Sort by sequence number
+        image_files.sort()
+        image_files = [file[1] for file in image_files]
+    
+    return render_template(
+        'creative_process.html', 
+        video=video,
+        creative_data=creative_data,
+        timeline_data=timeline_data,
+        image_files=image_files
+    )
+
 @main_bp.route('/media/<path:filename>')
 def media_file(filename):
     """Serve media files from output directory"""

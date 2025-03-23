@@ -1,4 +1,5 @@
 import datetime
+import json
 from flask_sqlalchemy import SQLAlchemy
 from enum import Enum
 
@@ -53,6 +54,9 @@ class Video(db.Model):
     video_path = db.Column(db.String(512), nullable=False)
     duration = db.Column(db.Float, nullable=True)
     thumbnail_path = db.Column(db.String(512), nullable=True)
+    creative_process = db.Column(db.Text, nullable=True)  # JSON data for video concept, image descriptions, etc.
+    images_dir = db.Column(db.String(512), nullable=True)  # Path to generated images directory
+    timeline_path = db.Column(db.String(512), nullable=True)  # Path to timeline JSON
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     
     def __repr__(self):
@@ -67,5 +71,18 @@ class Video(db.Model):
             'video_path': self.video_path,
             'duration': self.duration,
             'thumbnail_path': self.thumbnail_path,
+            'creative_process': self.creative_process,
+            'images_dir': self.images_dir,
+            'timeline_path': self.timeline_path,
             'created_at': self.created_at.isoformat()
         }
+        
+    def get_creative_data(self):
+        """Parse and return the creative process data"""
+        if not self.creative_process:
+            return None
+        
+        try:
+            return json.loads(self.creative_process)
+        except:
+            return None

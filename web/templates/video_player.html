@@ -73,6 +73,11 @@
                         <i class="fas fa-download me-1"></i> Download Video
                     </a>
                     
+                    <a href="{{ url_for('main.creative_process', video_id=video.id) }}" 
+                       class="btn btn-primary ms-2">
+                        <i class="fas fa-magic me-1"></i> Creative Process
+                    </a>
+                    
                     <a href="{{ url_for('main.task_detail', task_id=video.task_id) }}" 
                        class="btn btn-outline-primary ms-2">
                         <i class="fas fa-info-circle me-1"></i> Task Details
@@ -97,6 +102,15 @@
             <li><i class="fas fa-check text-success me-2"></i>Custom creative direction for visual style</li>
             <li><i class="fas fa-check text-success me-2"></i>Professional video composition</li>
         </ul>
+        
+        <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle me-2"></i>
+            Want to see how AI created this video? Check out the 
+            <a href="{{ url_for('main.creative_process', video_id=video.id) }}" class="alert-link">
+                creative process
+            </a> 
+            page to view the AI's video concept, image descriptions, and generated images!
+        </div>
         
         <div class="text-center mt-3">
             <a href="{{ url_for('main.index') }}" class="btn btn-primary">

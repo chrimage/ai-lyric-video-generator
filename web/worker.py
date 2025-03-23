@@ -145,6 +145,39 @@ def process_video_task(task_id, config):
             artists = timeline.song_info.get('artists', ['Unknown Artist'])
             artist_str = ', '.join(artists) if isinstance(artists, list) else str(artists)
             
+            # Extract the creative process information
+            creative_process_data = {}
+            
+            # Get the video concept from the timeline
+            if hasattr(timeline, 'video_concept') and timeline.video_concept:
+                creative_process_data['video_concept'] = timeline.video_concept
+            
+            # Extract image descriptions from segments
+            image_descriptions = []
+            for segment in timeline.segments:
+                if segment.image_description:
+                    image_descriptions.append({
+                        'text': segment.text,
+                        'description': segment.image_description,
+                        'image_path': segment.image_path
+                    })
+            
+            creative_process_data['image_descriptions'] = image_descriptions
+            
+            # Get timeline path (for the video_info.json file)
+            timeline_dir = os.path.dirname(video_path)
+            timeline_rel_path = None
+            timeline_file_path = os.path.join(timeline_dir, "timeline_final.json")
+            
+            if os.path.exists(timeline_file_path):
+                timeline_rel_path = os.path.relpath(timeline_file_path, base_dir)
+            
+            # Get images directory path
+            images_dir = result.get("images_dir")
+            images_rel_dir = None
+            if images_dir and os.path.exists(images_dir):
+                images_rel_dir = os.path.relpath(images_dir, base_dir)
+            
             # Create video record
             video = Video(
                 task_id=task.id,
@@ -152,7 +185,10 @@ def process_video_task(task_id, config):
                 artist=artist_str,
                 video_path=rel_video_path,
                 thumbnail_path=thumbnail_path,
-                duration=duration
+                duration=duration,
+                creative_process=json.dumps(creative_process_data),
+                images_dir=images_rel_dir,
+                timeline_path=timeline_rel_path
             )
             
             # Update task
