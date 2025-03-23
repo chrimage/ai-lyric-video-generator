@@ -15,12 +15,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import from main app
 from main import create_lyric_video
 from web.models import db, Task, Video, TaskStatus
+from utils import logger
+from file_manager import SongDirectory
 
 # Import MoviePy for thumbnail generation
 try:
     from moviepy.editor import VideoFileClip
 except ImportError:
-    print("Warning: MoviePy not available. Thumbnail generation will be disabled.")
+    logger.warning("MoviePy not available. Thumbnail generation will be disabled.")
 
 # Global task queue
 task_queue = queue.Queue()
@@ -48,7 +50,6 @@ def process_video_task(task_id, config):
     # Import here to avoid circular imports
     from web import create_app
     from lib.song_utils import search_song
-    from main import create_song_directory_from_info
     
     # Create app context for database operations
     app = create_app()
@@ -68,7 +69,7 @@ def process_video_task(task_id, config):
             output_base_dir = getattr(config, 'OUTPUT_DIR', 'output')
             
             # Search for song to get accurate metadata
-            print(f"Searching for song: '{task.song_query}'...")
+            logger.info(f"Searching for song: '{task.song_query}'...")
             song_info = search_song(task.song_query)
             
             if not song_info:
@@ -79,7 +80,7 @@ def process_video_task(task_id, config):
                 return {"error": "Song not found"}
             
             # Generate the lyric video - let the main process handle directory creation
-            print(f"Starting lyric video generation for '{task.song_query}'")
+            logger.info(f"Starting lyric video generation for '{task.song_query}'")
             gemini_api_key = getattr(config, 'GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY'))
             result = create_lyric_video(
                 song_query=task.song_query,
@@ -137,7 +138,7 @@ def process_video_task(task_id, config):
                         # Also store video duration
                         duration = video.duration
             except Exception as e:
-                print(f"Error generating thumbnail: {e}")
+                logger.error(f"Error generating thumbnail: {e}")
             
             # Get the title and artist from the timeline
             title = timeline.song_info.get('title', 'Unknown Title')
@@ -171,7 +172,7 @@ def process_video_task(task_id, config):
             
         except Exception as e:
             # Log the full error
-            print(f"Error processing task {task_id}: {e}")
+            logger.error(f"Error processing task {task_id}: {e}")
             traceback.print_exc()
             
             # Update task status
@@ -186,7 +187,7 @@ def worker_loop(config):
     """Worker thread function that processes tasks from the queue"""
     global worker_running
     
-    print("Starting worker thread")
+    logger.info("Starting worker thread")
     worker_running = True
     
     while worker_running:
@@ -196,7 +197,7 @@ def worker_loop(config):
             task_id = task_queue.get(timeout=1.0)
             
             # Process the task
-            print(f"Processing task {task_id} from queue")
+            logger.info(f"Processing task {task_id} from queue")
             process_video_task(task_id, config)
             
             # Mark task as done
@@ -206,11 +207,11 @@ def worker_loop(config):
             # No tasks in the queue, continue waiting
             pass
         except Exception as e:
-            print(f"Error in worker thread: {e}")
+            logger.error(f"Error in worker thread: {e}")
             traceback.print_exc()
             # Continue the loop despite errors
     
-    print("Worker thread stopping")
+    logger.info("Worker thread stopping")
 
 def reload_pending_tasks(config):
     """
@@ -221,7 +222,7 @@ def reload_pending_tasks(config):
     from web import create_app
     from web.models import Task, TaskStatus
     
-    print("Reloading pending tasks from database into queue...")
+    logger.info("Reloading pending tasks from database into queue...")
     
     # Create app context for database operations
     app = create_app()
@@ -235,7 +236,7 @@ def reload_pending_tasks(config):
             task_queue.put(task.id)
             task_count += 1
         
-        print(f"Reloaded {task_count} pending tasks into the queue")
+        logger.info(f"Reloaded {task_count} pending tasks into the queue")
     
     return task_count
 
