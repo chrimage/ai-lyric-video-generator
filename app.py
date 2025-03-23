@@ -9,13 +9,14 @@ import os
 import sys
 import argparse
 from web import create_app
-from web.config import Config
 from web.worker import start_worker_thread
+from config import config
 
-app = create_app(Config)
+# Create Flask application with the unified config
+app = create_app(config)
 
 # Start the worker thread when the app starts
-start_worker_thread(Config)
+start_worker_thread(config)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AI Lyric Video Generator Web Application')
@@ -39,6 +40,8 @@ if __name__ == "__main__":
     
     # Run the appropriate command
     if args.command == 'runserver':
+        from utils import logger
+        logger.info(f"Starting web server on {args.host}:{args.port}...")
         print(f"Starting web server on {args.host}:{args.port}...")
         print("Press Ctrl+C to stop")
         app.run(host=args.host, port=args.port, debug=args.debug)
@@ -53,5 +56,5 @@ def make_shell_context():
         'Task': Task,
         'Video': Video,
         'TaskStatus': TaskStatus,
-        'Config': Config
+        'config': config
     }
