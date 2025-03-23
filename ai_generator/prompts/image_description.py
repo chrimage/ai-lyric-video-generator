@@ -23,23 +23,42 @@ SEGMENTS:
 For each segment, provide ONLY the image description as a numbered list matching the segment numbers above.
 
 ⚠️ ABSOLUTELY CRITICAL REQUIREMENT - SELF-CONTAINED DESCRIPTIONS ⚠️
-* Each image description MUST be COMPLETELY self-contained and standalone with NO external references
-* ❌ CRITICAL ERROR: NEVER use phrases like "from the previous image", "same as before", "the clockwork crown from the previous image", "similar to image X", "continuing from previous", etc.
+* Each description must be treated as if it will be processed COMPLETELY INDEPENDENTLY without any access to other descriptions
+* The AI generating each image will have NO KNOWLEDGE of any other images in the sequence
+* ❌ CRITICAL ERROR: NEVER use phrases like "from the previous image", "same as before", "continues the scene", "once again", "still wearing", etc.
+* ❌ CRITICAL ERROR: NEVER say "the clockwork crown from the previous image", "the same character as before", "similar to image X", etc.
 * ❌ CRITICAL ERROR: NEVER reference other images by their number or mention previous or future images at all
 * ❌ CRITICAL ERROR: NEVER reference characters, objects, or elements without fully describing them in each image
 * ❌ CRITICAL ERROR: If the same crown, character, or element appears in multiple images, describe it completely each time as if it's the first time it appears
-* Each description must contain ALL information needed to generate the image without any knowledge of other descriptions
-* Imagine each description will be given to a completely different artist who can't see any other descriptions
-* EVERY single image must stand completely on its own with full context and description
+* ❌ CRITICAL ERROR: NEVER use "the" to describe something that hasn't been introduced within this description
+* IMAGINE: Each description will be given to a completely different artist who can only see that one description and nothing else
+* IMAGINE: I will feed each description into a separate, independent image generator that has no memory or knowledge of any other images
+* This is not a storyboard where one image builds off another - each is ENTIRELY self-contained
+
+SPECIFICALLY PROHIBITED PHRASES (WILL CAUSE ERRORS):
+- "from the previous image"
+- "same as before/earlier"
+- "as seen earlier"
+- "continuing the scene"
+- "the [anything] from [any other image]"
+- "still [doing anything]"
+- "once again"
+- "previously"
+- "returning to"
+- "the same [anything]"
+- "again"
+- "mentioned earlier"
+- "now [doing something]"
+- "image #"
+- "in the last/previous frame/scene/image"
+- "consistent with the [anything]"
 
 IMPORTANT INSTRUCTIONS:
 - For segments with lyrics, the text MUST be visually incorporated into the scene in a creative way
-- For instrumental segments, design images that maintain narrative flow and build anticipation
-- Create a cohesive visual journey where each image builds upon the previous ones
-- Ensure visual elements and themes evolve gradually, not abruptly 
-- Each image should be a self-contained scene while fully describing all visual elements
-- REMEMBER: While maintaining narrative continuity, you must ALWAYS describe every element fully in each image
-- To maintain continuity without direct references: Instead of "The clockwork crown from the previous image," write "A detailed clockwork crown with intricate gold and silver gears"
+- Fully describe every visual element as if it's being introduced for the first time in each image
+- For recurring elements: Instead of "The clockwork crown from before," write "A detailed clockwork crown with intricate gold and silver gears"
+- For visual progression, use distinct descriptions that imply a narrative without directly referencing other images
+- Concrete example: Instead of "The same forest path, now with moonlight" write "A serene forest path illuminated by silvery moonlight filtering through ancient oak trees"
 
 HANDLING SENSITIVE LYRICS:
 - When dealing with provocative, violent, explicit, or adult-themed lyrics, use sophisticated artistic techniques:

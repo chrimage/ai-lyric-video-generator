@@ -7,7 +7,14 @@ Create a high-quality still image for a lyric video with the following descripti
 
 {description}
 
-IMPORTANT: This image must be entirely self-contained and stand alone, with no assumptions about any other images in the sequence. The image should be designed to make sense without any references to previous or future images.
+IMPORTANT: This image is completely independent and must make sense on its own without any context from other images. It MUST fully depict everything described in the prompt without relying on or referencing any other images.
+
+CRITICAL REQUIREMENTS:
+- Create EXACTLY what is described in the prompt
+- Do not assume any knowledge of previous images or scenes
+- Treat this as a completely standalone, independent image
+- Include all elements mentioned in the description
+- This is for a single frame in a lyric video
 
 The image should:
 - Be in 16:9 aspect ratio (1280x720 or similar)
@@ -15,6 +22,7 @@ The image should:
 - Be visually striking and suitable for a music video
 - No humans or faces should be included
 - Contain all visual elements fully described in the prompt above
+- Use a consistent artistic style throughout the entire image
 
 ARTISTIC GUIDANCE FOR SENSITIVE CONTENT:
 If the description contains provocative, violent, explicit, or adult-themed references:

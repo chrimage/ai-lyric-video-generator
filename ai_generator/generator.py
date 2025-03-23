@@ -162,7 +162,64 @@ class AIImageGenerator:
         if current_number is not None and current_description:
             descriptions.append(current_description.strip())
         
+        # Post-process descriptions to remove references to other images
+        descriptions = [self._clean_image_references(desc) for desc in descriptions]
+        
         return descriptions
+        
+    def _clean_image_references(self, description: str) -> str:
+        """Clean references to other images in the descriptions"""
+        import re
+        
+        # Patterns that indicate references to other images
+        reference_patterns = [
+            r'\b(?:from|in|as in|like in|similar to|same as|continuing from|as seen in) (?:the )?(?:previous|earlier|last|other|prior) (?:image|scene|frame|picture|shot)',
+            r'\bsame (?:character|person|figure|setting|background|environment|crown|object|element|scene|location) (?:as|from) (?:before|previous|earlier)',
+            r'\bthe (?:character|person|figure|crown|object|element) (?:from|in) the (?:previous|last|prior|earlier) (?:image|scene|frame)',
+            r'\bcontinuation of the (?:previous|earlier|last) (?:scene|image|shot|frame)',
+            r'\bcontinues (?:from|where) the (?:previous|earlier|last) (?:scene|image|shot|frame)',
+            r'\bimage \d+',
+            r'\bprevious(?:ly)?(?:\s+shown|\s+mentioned|\s+seen|\s+described)?',
+            r'\bagain(?:\s+shows|\s+displays|\s+depicts|\s+featuring|\s+with|\s+appears)?',
+            r'\bstill (?:wearing|holding|carrying|showing|displaying)',
+            r'\bsame (?:setting|location|place|scene|background|format|style|colors?|palette|aesthetic)',
+            r'\breturn(?:s|ing) to the',
+            r'\bonce again',
+        ]
+        
+        # Replace the problematic patterns with generic descriptions
+        for pattern in reference_patterns:
+            matches = re.finditer(pattern, description, re.IGNORECASE)
+            for match in matches:
+                # Log the found reference
+                print(f"Found reference in description: '{match.group(0)}'")
+                
+                # Decide how to replace based on the type of reference
+                matched_text = match.group(0).lower()
+                
+                if "crown" in matched_text or "object" in matched_text or "element" in matched_text:
+                    # Replace specific object references
+                    description = re.sub(pattern, "a detailed", description, flags=re.IGNORECASE)
+                elif "character" in matched_text or "person" in matched_text or "figure" in matched_text:
+                    # Replace character references
+                    description = re.sub(pattern, "a figure", description, flags=re.IGNORECASE)
+                elif "setting" in matched_text or "background" in matched_text or "scene" in matched_text or "location" in matched_text:
+                    # Replace setting references
+                    description = re.sub(pattern, "a", description, flags=re.IGNORECASE)
+                elif any(term in matched_text for term in ["still", "again", "continues", "continuation", "returning", "once again"]):
+                    # Replace continuity references
+                    description = re.sub(pattern, "", description, flags=re.IGNORECASE)
+                elif "same" in matched_text:
+                    # Replace "same as" references
+                    description = re.sub(pattern, "a", description, flags=re.IGNORECASE)
+                else:
+                    # Generic replacement for other cases
+                    description = re.sub(pattern, "", description, flags=re.IGNORECASE)
+        
+        # Remove any double spaces created by our replacements
+        description = re.sub(r'\s+', ' ', description).strip()
+        
+        return description
     
     def generate_images(self, timeline: LyricsTimeline) -> LyricsTimeline:
         """Generate images for each segment based on descriptions"""
