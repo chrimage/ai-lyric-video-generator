@@ -71,16 +71,6 @@ class AIImageGenerator:
         else:
             descriptions = self._generate_mock_descriptions(timeline.segments)
         
-        # Check for problematic descriptions and print warnings
-        problematic_descriptions = self._check_for_problematic_descriptions(descriptions)
-        if problematic_descriptions:
-            print("\n⚠️ WARNING: Some image descriptions may contain references to other images")
-            print("This could cause issues with image generation and visual continuity.")
-            print("Consider regenerating the descriptions or editing them manually.")
-            print("\nPotentially problematic descriptions:")
-            for idx, desc in problematic_descriptions:
-                print(f"\nDescription {idx+1}: {desc[:100]}...")
-        
         # Update timeline with descriptions
         for i, desc in enumerate(descriptions):
             if i < len(timeline.segments):
@@ -92,34 +82,6 @@ class AIImageGenerator:
                 segment.image_description = f"A visual representation of '{segment.text}' for a music video."
         
         return timeline
-        
-    def _check_for_problematic_descriptions(self, descriptions: List[str]) -> List[tuple]:
-        """Check descriptions for problematic patterns that reference other images"""
-        problematic = []
-        
-        problematic_patterns = [
-            r'\b(?:from|in|as in|like in|similar to|same as|continuing from|as seen in) (?:the )?(?:previous|earlier|last|other|prior) (?:image|scene|frame|picture|shot)',
-            r'\bsame (?:character|person|figure|setting|background|environment|crown|object|element|scene|location) (?:as|from) (?:before|previous|earlier)',
-            r'\bthe (?:character|person|figure|crown|object|element) (?:from|in) the (?:previous|last|prior|earlier) (?:image|scene|frame)',
-            r'\bcontinuation of the (?:previous|earlier|last) (?:scene|image|shot|frame)',
-            r'\bcontinues (?:from|where) the (?:previous|earlier|last) (?:scene|image|shot|frame)',
-            r'\bimage \d+',
-            r'\bprevious(?:ly)?(?:\s+shown|\s+mentioned|\s+seen|\s+described)?',
-            r'\bagain(?:\s+shows|\s+displays|\s+depicts|\s+featuring|\s+with|\s+appears)?',
-            r'\bstill (?:wearing|holding|carrying|showing|displaying)',
-            r'\bsame (?:setting|location|place|scene|background|format|style|colors?|palette|aesthetic)',
-            r'\breturn(?:s|ing) to the',
-            r'\bonce again',
-        ]
-        
-        import re
-        for i, desc in enumerate(descriptions):
-            for pattern in problematic_patterns:
-                if re.search(pattern, desc, re.IGNORECASE):
-                    problematic.append((i, desc))
-                    break  # Once we find a match, no need to check other patterns
-        
-        return problematic
     
     def _generate_descriptions_with_gemini(self, prompt: str) -> List[str]:
         """Generate image descriptions using Gemini API"""
