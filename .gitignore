@@ -5,6 +5,8 @@ __pycache__/
 *.so
 .Python
 env/
+venv/
+.venv/
 build/
 develop-eggs/
 dist/
@@ -25,19 +27,43 @@ var/
 .vscode/
 *.swp
 *.swo
+.DS_Store
 
 # Project specific
 output/
+**/output/
 instance/
+downloads/
+*_TEMP_*/
+*temp*/
+task_*/
+_temp_*/
+examples/
+
+# Media and generated files
 *.mp3
 *.mp4
 *.wav
 *.png
 *.jpg
 *.jpeg
+*.gif
+*.bmp
 *.log
+*.json
+!package.json
+!package-lock.json
+!requirements*.json
+!example_*.json
+**/images/
+**/timeline_*.json
+**/video_info.json
+**/*_lyric_video.mp4
+**/*.log.mbtree
+**/thumbnail.jpg
 
 # Web app specific
 *.db
 web/static/uploads/
 web/app.db
+instance/
