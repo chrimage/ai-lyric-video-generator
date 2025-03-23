@@ -149,26 +149,22 @@ def create_video_from_timeline(timeline: LyricsTimeline, audio_path: str, output
     
     # If we have clips, create the full video sequence
     if clips:
-        final_clips = []
+        # Create a list of clips with proper start times for direct concatenation
+        # This preserves the exact timing of segments without any transition effects
+        print("Creating a sequence of clips for direct concatenation...")
         
-        # Create a sequence of clips with proper timing
-        for i, (clip, segment) in enumerate(zip(clips, valid_segments)):
-            start_time = segment.start_time
-            
-            # For precise timing, explicitly set start and duration
-            clip = clip.set_start(start_time)
-            
-            # Set exact duration to segment length (no transitions)
-            clip = clip.set_duration(segment.duration())
-            
-            # Add to final clips
-            final_clips.append(clip)
-            
-        # Alternative method using concatenation with transition
+        # Use concatenate_videoclips with method="compose" and no transitions for clean hard cuts
+        from moviepy.editor import concatenate_videoclips
+        
         try:
-            # First try with our manually created sequence
-            print(f"Creating composite video with {len(final_clips)} clips...")
-            video = CompositeVideoClip(final_clips)
+            # Prepare clips for concatenation by setting their durations explicitly
+            for i, (clip, segment) in enumerate(zip(clips, valid_segments)):
+                # Set exact duration to segment length (no transitions)
+                clip = clip.set_duration(segment.duration())
+                clips[i] = clip
+            
+            # Use concatenate_videoclips with no transition effect (hard cuts)
+            video = concatenate_videoclips(clips, method="compose")
             video = video.set_audio(audio_clip)
             
             # Ensure video covers the full audio duration
@@ -181,151 +177,52 @@ def create_video_from_timeline(timeline: LyricsTimeline, audio_path: str, output
             return output_path
             
         except Exception as e:
-            # If the first method fails, try the simpler concatenation approach
-            print(f"Error with composite method: {e}")
-            print("Trying alternate concatenation method...")
+            print(f"Error with concatenation method: {e}")
+            print("Trying emergency method...")
             
-            # Direct concatenation as fallback
+            # Ultra-simplified emergency method for maximum compatibility
             try:
-                # Reset clip durations to exact segment durations (no overlap)
-                for i, (clip, segment) in enumerate(zip(clips, valid_segments)):
-                    clip = clip.set_duration(segment.duration())
-                    clip = clip.set_start(segment.start_time)
-                    clips[i] = clip
+                print("Using emergency direct PIL method to assemble video...")
                 
-                # Use concatenate_videoclips instead of CompositeVideoClip
-                # No transitions - hard cuts only
-                from moviepy.editor import concatenate_videoclips
-                video = concatenate_videoclips(clips, method="compose", transition=None)
-                video = video.set_audio(audio_clip)
-                video = video.set_duration(audio_clip.duration)
+                # Import necessary libraries directly
+                from PIL import Image
+                import numpy as np
                 
-                print(f"Writing video with alternate method to {output_path}...")
-                video.write_videofile(output_path, fps=24, codec='libx264', audio_codec='aac')
+                # Create emergency clips list (using clips we already created)
+                emergency_clips = []
                 
-                return output_path
-            except Exception as e2:
-                print(f"Error with alternate method: {e2}")
-                print("Trying basic method without transitions...")
+                # Process all valid segments with explicit timing
+                for clip, segment in zip(clips, valid_segments):
+                    try:
+                        # Set explicit duration and make sure we don't try to use transitions
+                        emergency_clip = clip.set_duration(segment.duration())
+                        emergency_clips.append(emergency_clip)
+                    except Exception as clip_error:
+                        print(f"Error processing clip in emergency mode: {clip_error}")
                 
-                # Ultra-simplified emergency method for maximum compatibility
-                try:
-                    print("Using emergency direct PIL method to assemble video...")
-                    
-                    # Import necessary libraries directly
-                    from PIL import Image
-                    import numpy as np
-                    
-                    # Create emergency clips list
-                    emergency_clips = []
-                    
-                    # Process all valid segments
-                    for i, segment in enumerate(timeline.segments):
-                        if not segment.image_path or not os.path.exists(segment.image_path):
-                            print(f"Skipping missing image for segment {i+1}")
-                            continue
-                        
-                        try:
-                            # Load image directly with PIL (bypassing MoviePy)
-                            pil_img = Image.open(segment.image_path)
-                            
-                            # Don't resize with PIL - we'll let MoviePy handle aspect ratio preservation
-                            
-                            # Convert to numpy array that MoviePy can use
-                            img_array = np.array(pil_img)
-                            
-                            # Create clip and set timing
-                            img_clip = ImageClip(img_array)
-                            
-                            # Resize the clip to fit within target dimensions while preserving aspect ratio
-                            # First get the current width and height
-                            current_w, current_h = img_clip.size
-                            
-                            # Calculate the scaling factor to fit within the target dimensions while preserving aspect ratio
-                            width_ratio = target_width / current_w
-                            height_ratio = target_height / current_h
-                            scale_factor = min(width_ratio, height_ratio)
-                            
-                            # Calculate new dimensions
-                            new_w = int(current_w * scale_factor)
-                            new_h = int(current_h * scale_factor)
-                            
-                            # Get PIL resampling filter based on what's available
-                            def get_pil_resample_filter():
-                                """Get the best available resampling filter in the current PIL version"""
-                                # Check for Resampling enum (PIL 9.0+)
-                                if hasattr(Image, 'Resampling') and hasattr(Image.Resampling, 'LANCZOS'):
-                                    return Image.Resampling.LANCZOS
-                                # Check for LANCZOS constant (PIL 7.0+)
-                                elif hasattr(Image, 'LANCZOS'):
-                                    return Image.LANCZOS
-                                # Check for ANTIALIAS (older PIL versions)
-                                elif hasattr(Image, 'ANTIALIAS'):
-                                    return Image.ANTIALIAS
-                                # Fallback to BICUBIC which should always be available
-                                else:
-                                    return Image.BICUBIC
-                            
-                            # Resize using PIL directly to avoid moviepy resize issues
-                            try:
-                                # Get the best available resampling filter
-                                resample_filter = get_pil_resample_filter()
-                                
-                                # Resize with PIL
-                                pil_img_resized = pil_img.resize((new_w, new_h), resample_filter)
-                                
-                                # Create a new clip from the resized image
-                                img_array_resized = np.array(pil_img_resized)
-                                img_clip = ImageClip(img_array_resized)
-                            except Exception as resize_error:
-                                print(f"Error with PIL resize method in emergency mode: {resize_error}")
-                                # Ultimate fallback: use moviepy resize with no parameters
-                                try:
-                                    img_clip = img_clip.resize(newsize=(new_w, new_h))
-                                except:
-                                    img_clip = img_clip.resize(height=new_h)
-                                print(f"Used basic moviepy resize fallback for segment {i+1} in emergency mode")
-                            
-                            # Center the image
-                            img_clip = img_clip.set_position("center")
-                            
-                            # Create a black background for letterboxing/pillarboxing
-                            from moviepy.editor import ColorClip
-                            black_bg = ColorClip(size=(target_width, target_height), color=(0, 0, 0))
-                            black_bg = black_bg.set_duration(segment.duration())
-                            black_bg = black_bg.set_start(segment.start_time)
-                            
-                            # Create composite with proper aspect ratio
-                            from moviepy.editor import CompositeVideoClip
-                            composite = CompositeVideoClip([black_bg, img_clip], size=(target_width, target_height))
-                            
-                            # Set timing on the composite
-                            composite = composite.set_start(segment.start_time)
-                            composite = composite.set_duration(segment.duration())
-                            
-                            # Add to emergency clips list
-                            emergency_clips.append(composite)
-                            print(f"Successfully processed image {i+1} with emergency method")
-                            
-                        except Exception as img_error:
-                            print(f"Error processing image {i+1} with emergency method: {img_error}")
-                    
-                    if emergency_clips:
-                        # Create video with simplified clips
-                        video = CompositeVideoClip(emergency_clips, size=(target_width, target_height))
+                if emergency_clips:
+                    # Try one more time with concatenate_videoclips and explicit no-transition setting
+                    try:
+                        # Hard cuts only - explicitly set method and transition parameters
+                        video = concatenate_videoclips(emergency_clips, method="compose", transition=None)
                         video = video.set_audio(audio_clip)
                         video = video.set_duration(audio_clip.duration)
                         
                         print(f"Writing video with emergency method to {output_path}...")
                         video.write_videofile(output_path, fps=24, codec='libx264', audio_codec='aac')
                         return output_path
-                    else:
-                        print("Emergency method couldn't process any images.")
-                        
-                except Exception as e3:
-                    print(f"Error with emergency method: {e3}")
-                    print("All methods failed to create video.")
+                    except Exception as emerg_error:
+                        print(f"Error with emergency concatenation: {emerg_error}")
+                        print("All methods failed to create video.")
+                        return None
+                else:
+                    print("Emergency method couldn't process any clips.")
                     return None
+                    
+            except Exception as e3:
+                print(f"Error with emergency method: {e3}")
+                print("All methods failed to create video.")
+                return None
     else:
         print("No valid clips to assemble into a video")
         return None

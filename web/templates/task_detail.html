@@ -1,0 +1,202 @@
+{% extends "layout.html" %}
+
+{% block title %}Task Details - AI Lyric Video Generator{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('main.tasks') }}">Tasks</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Task #{{ task.id }}</li>
+    </ol>
+</nav>
+
+<div class="card shadow">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="fas fa-tasks me-2"></i>Task Details</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h5>Task Information</h5>
+                <table class="table">
+                    <tr>
+                        <th style="width: 30%">Task ID</th>
+                        <td>{{ task.id }}</td>
+                    </tr>
+                    <tr>
+                        <th>Song Query</th>
+                        <td>{{ task.song_query }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status</th>
+                        <td>
+                            {% if task.status.value == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                            {% elif task.status.value == 'processing' %}
+                                <span class="badge bg-primary">Processing</span>
+                            {% elif task.status.value == 'pending' %}
+                                <span class="badge bg-secondary">Pending</span>
+                            {% elif task.status.value == 'failed' %}
+                                <span class="badge bg-danger">Failed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Created At</th>
+                        <td>{{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    </tr>
+                    <tr>
+                        <th>Updated At</th>
+                        <td>{{ task.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    </tr>
+                    {% if job_status %}
+                    <tr>
+                        <th>Queue Status</th>
+                        <td>{{ job_status }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if queue_position is not none %}
+                    <tr>
+                        <th>Queue Position</th>
+                        <td>{{ queue_position + 1 }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+                
+                {% if task.error_message %}
+                <div class="alert alert-danger">
+                    <h5><i class="fas fa-exclamation-triangle me-2"></i>Error</h5>
+                    <p>{{ task.error_message }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="col-md-6">
+                <div id="task-status-container">
+                    {% if task.status.value == 'pending' %}
+                        <div class="alert alert-secondary">
+                            <h5><i class="fas fa-clock me-2"></i>Task Pending</h5>
+                            <p>This task is waiting in the queue to be processed.</p>
+                            {% if queue_position is not none %}
+                                <p>Current position in queue: <strong>{{ queue_position + 1 }}</strong></p>
+                                <div class="progress">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" style="width: 25%"></div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% elif task.status.value == 'processing' %}
+                        <div class="alert alert-primary">
+                            <h5><i class="fas fa-spinner fa-spin me-2"></i>Task Processing</h5>
+                            <p>Your lyric video is being created now.</p>
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 50%"></div>
+                            </div>
+                        </div>
+                    {% elif task.status.value == 'completed' and task.video %}
+                        <div class="alert alert-success">
+                            <h5><i class="fas fa-check-circle me-2"></i>Task Completed</h5>
+                            <p>Your lyric video has been generated successfully!</p>
+                            <div class="mt-2">
+                                <a href="{{ url_for('main.video_player', video_id=task.video.id) }}" 
+                                   class="btn btn-success">
+                                    <i class="fas fa-play me-1"></i> Watch Video
+                                </a>
+                            </div>
+                        </div>
+                        {% if task.video.thumbnail_path %}
+                            <div class="card mt-3">
+                                <div class="card-header">
+                                    <h5 class="mb-0">{{ task.video.title }}</h5>
+                                    <div class="text-muted">by {{ task.video.artist }}</div>
+                                </div>
+                                <div class="card-body p-0">
+                                    <a href="{{ url_for('main.video_player', video_id=task.video.id) }}">
+                                        <img src="{{ url_for('main.media_file', filename=task.video.thumbnail_path) }}" 
+                                             class="img-fluid" alt="Video thumbnail">
+                                    </a>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% elif task.status.value == 'failed' %}
+                        <div class="alert alert-danger">
+                            <h5><i class="fas fa-exclamation-circle me-2"></i>Task Failed</h5>
+                            <p>There was a problem generating your lyric video.</p>
+                            {% if task.error_message %}
+                                <p><strong>Error details:</strong> {{ task.error_message }}</p>
+                            {% endif %}
+                            <div class="mt-2">
+                                <button id="retry-button" class="btn btn-primary">
+                                    <i class="fas fa-redo me-1"></i> Retry with Same Song
+                                </button>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if task.status.value in ['pending', 'processing'] %}
+<div class="alert alert-info mt-4">
+    <h5><i class="fas fa-info-circle me-2"></i>Task Status Updates</h5>
+    <p>This page will automatically update every few seconds to show the latest status of your task.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    {% if task.status.value in ['pending', 'processing'] %}
+    // Function to update task status
+    function updateTaskStatus() {
+        $.ajax({
+            url: "{{ url_for('api.get_task', task_id=task.id) }}",
+            type: "GET",
+            success: function(data) {
+                // If status changed, reload the page
+                if (data.status !== "{{ task.status.value }}") {
+                    window.location.reload();
+                    return;
+                }
+                
+                // Schedule next update
+                setTimeout(updateTaskStatus, 5000);
+            },
+            error: function() {
+                // If error, try again in 10 seconds
+                setTimeout(updateTaskStatus, 10000);
+            }
+        });
+    }
+    
+    // Start updating task status
+    updateTaskStatus();
+    {% endif %}
+    
+    // Handle retry button
+    $("#retry-button").click(function() {
+        if (confirm("Do you want to retry generating a lyric video for '{{ task.song_query }}'?")) {
+            $.ajax({
+                url: "{{ url_for('api.create_task') }}",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({
+                    song_query: "{{ task.song_query }}"
+                }),
+                success: function(data) {
+                    window.location.href = "{{ url_for('main.task_detail', task_id=0) }}".replace("0", data.task.id);
+                },
+                error: function(xhr) {
+                    alert("Error creating task: " + (xhr.responseJSON ? xhr.responseJSON.error : "Unknown error"));
+                }
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

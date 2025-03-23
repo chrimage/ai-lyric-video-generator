@@ -1,0 +1,262 @@
+/* Custom styles for AI Lyric Video Generator - Dark Mode */
+
+/* General styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+.shadow {
+    box-shadow: 0 0.125rem 0.25rem rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Card enhancements */
+.card {
+    border-radius: 0.5rem;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    border: none;
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(255, 255, 255, 0.1) !important;
+}
+
+.card-header {
+    border-bottom: none;
+    padding: 0.75rem 1.25rem;
+    background-color: #2a2a2a;
+}
+
+/* Button styles */
+.btn {
+    border-radius: 0.25rem;
+    padding: 0.5rem 1rem;
+}
+
+.btn-light {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border-color: #3a3a3a;
+}
+
+.btn-light:hover {
+    background-color: #3a3a3a;
+    color: #ffffff;
+    border-color: #4a4a4a;
+}
+
+/* Progress bar style */
+.progress {
+    height: 0.75rem;
+    border-radius: 1rem;
+    background-color: #2a2a2a;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background-color: #375a7f;
+}
+
+/* Task list styling */
+.list-group-item {
+    border-left: none;
+    border-right: none;
+    padding: 1rem 1.25rem;
+    transition: background-color 0.2s;
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #333;
+}
+
+.list-group-item:hover {
+    background-color: rgba(55, 90, 127, 0.2);
+}
+
+.list-group-item:first-child {
+    border-top: none;
+}
+
+/* Badge styling */
+.badge {
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+    border-radius: 0.25rem;
+}
+
+/* Breadcrumb styling */
+.breadcrumb {
+    background-color: transparent;
+    padding: 0.75rem 0;
+    margin-bottom: 1.5rem;
+    color: #aaa;
+}
+
+.breadcrumb-item.active {
+    color: #e0e0e0;
+}
+
+.breadcrumb-item a {
+    color: #375a7f;
+}
+
+/* Footer styling */
+footer {
+    border-top: 1px solid #333;
+    background-color: #1a1a1a !important;
+    color: #e0e0e0 !important;
+}
+
+footer .text-muted {
+    color: #aaa !important;
+}
+
+/* Video player enhancements */
+.video-container video:focus {
+    outline: none;
+}
+
+.video-container {
+    background-color: #000;
+    border-radius: 0.5rem;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .table-responsive {
+        margin-bottom: 0;
+    }
+}
+
+/* Task status area */
+#task-status-area .alert {
+    border-radius: 0.5rem;
+    background-color: #2a2a2a;
+    border-color: #333;
+    color: #e0e0e0;
+}
+
+/* Queue info section */
+#queue-info {
+    background-color: #1e1e1e;
+    border: 1px solid #333;
+}
+
+/* Animation for status updates */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.bg-processing {
+    animation: pulse 2s infinite ease-in-out;
+}
+
+/* Dark mode table */
+.table {
+    color: #e0e0e0;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.table thead th {
+    border-bottom-color: #333;
+}
+
+.table td, .table th {
+    border-top-color: #333;
+}
+
+/* Form controls in dark mode */
+.form-control, .form-select {
+    background-color: #2a2a2a;
+    border-color: #333;
+    color: #e0e0e0;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: #2a2a2a;
+    border-color: #375a7f;
+    color: #e0e0e0;
+    box-shadow: 0 0 0 0.25rem rgba(55, 90, 127, 0.25);
+}
+
+.form-control::placeholder {
+    color: #888;
+}
+
+/* Custom dark text-muted */
+.text-muted {
+    color: #aaa !important;
+}
+
+/* Dark mode Bootstrap card header colors */
+.card-header.bg-primary {
+    background-color: #375a7f !important;
+}
+
+.card-header.bg-info {
+    background-color: #436e8c !important;
+}
+
+.card-header.bg-success {
+    background-color: #3d7a5d !important;
+}
+
+/* Dark mode alert styles */
+.alert-light {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border-color: #333;
+}
+
+.alert-info {
+    background-color: #2a3c4a;
+    color: #d1dee8;
+    border-color: #305b7c;
+}
+
+.alert-warning {
+    background-color: #4a3c2a;
+    color: #e8d1ae;
+    border-color: #7c6030;
+}
+
+/* Button outlines in dark mode */
+.btn-outline-primary {
+    color: #75adff;
+    border-color: #375a7f;
+}
+
+.btn-outline-primary:hover {
+    background-color: #375a7f;
+    color: #ffffff;
+}
+
+/* Theme-specific colors for badges */
+.badge.bg-secondary {
+    background-color: #555 !important;
+}
+
+.badge.bg-primary {
+    background-color: #375a7f !important;
+}
+
+.badge.bg-success {
+    background-color: #3d7a5d !important;
+}
+
+.badge.bg-danger {
+    background-color: #8c4343 !important;
+}

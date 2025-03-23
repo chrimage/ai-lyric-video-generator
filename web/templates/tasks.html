@@ -1,0 +1,128 @@
+{% extends "layout.html" %}
+
+{% block title %}All Tasks - AI Lyric Video Generator{% endblock %}
+
+{% block content %}
+<div class="card shadow">
+    <div class="card-header bg-success text-white">
+        <h4 class="mb-0"><i class="fas fa-list-ul me-2"></i>All Tasks</h4>
+    </div>
+    <div class="card-body">
+        {% if pagination.items %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Song Query</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in pagination.items %}
+                            <tr>
+                                <td>{{ task.id }}</td>
+                                <td>{{ task.song_query }}</td>
+                                <td>
+                                    {% if task.status.value == 'completed' %}
+                                        <span class="badge bg-success">Completed</span>
+                                    {% elif task.status.value == 'processing' %}
+                                        <span class="badge bg-primary">Processing</span>
+                                    {% elif task.status.value == 'pending' %}
+                                        <span class="badge bg-secondary">Pending</span>
+                                    {% elif task.status.value == 'failed' %}
+                                        <span class="badge bg-danger">Failed</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ task.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>
+                                    <a href="{{ url_for('main.task_detail', task_id=task.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-info-circle"></i> Details
+                                    </a>
+                                    {% if task.video %}
+                                        <a href="{{ url_for('main.video_player', video_id=task.video.id) }}" 
+                                           class="btn btn-sm btn-outline-success ms-1">
+                                            <i class="fas fa-play"></i> Watch
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <nav aria-label="Task pagination">
+                <ul class="pagination justify-content-center">
+                    <!-- Previous page link -->
+                    {% if pagination.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('main.tasks', page=pagination.prev_num) }}">
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
+                        </li>
+                    {% endif %}
+                    
+                    <!-- Page numbers -->
+                    {% for page_num in pagination.iter_pages(left_edge=2, left_current=2, right_current=3, right_edge=2) %}
+                        {% if page_num %}
+                            {% if page_num == pagination.page %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ page_num }}</span>
+                                </li>
+                            {% else %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('main.tasks', page=page_num) }}">{{ page_num }}</a>
+                                </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <!-- Next page link -->
+                    {% if pagination.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('main.tasks', page=pagination.next_num) }}">
+                                Next <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            
+            <div class="text-center mt-3">
+                <p class="text-muted">
+                    Showing tasks {{ pagination.first_item }} to {{ pagination.last_item }} 
+                    of {{ pagination.total }}
+                </p>
+            </div>
+        {% else %}
+            <div class="alert alert-light">
+                <p class="mb-0">No tasks have been created yet.</p>
+            </div>
+            <div class="text-center">
+                <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+                    <i class="fas fa-plus-circle me-1"></i> Create a Task
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

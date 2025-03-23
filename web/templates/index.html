@@ -1,0 +1,213 @@
+{% extends "layout.html" %}
+
+{% block title %}AI Lyric Video Generator{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-music me-2"></i>Generate Lyric Video</h4>
+            </div>
+            <div class="card-body">
+                <form id="song-form">
+                    <div class="mb-3">
+                        <label for="song-query" class="form-label">Song Name and Artist</label>
+                        <input type="text" class="form-control" id="song-query" name="song_query" 
+                               placeholder="Enter song name and artist (e.g. Bohemian Rhapsody Queen)" required>
+                        <div class="form-text">Enter the song name followed by the artist for best results</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-play me-1"></i> Generate Video
+                    </button>
+                </form>
+                
+                <div id="task-status-area" class="mt-4 d-none">
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-info-circle me-2"></i>Task Status</h5>
+                        <p id="task-message">Your task has been submitted and is now in the queue.</p>
+                        <div id="task-details">
+                            <strong>Task ID:</strong> <span id="task-id"></span><br>
+                            <strong>Status:</strong> <span id="task-status"></span>
+                        </div>
+                        <div class="mt-2">
+                            <a id="task-detail-link" href="#" class="btn btn-sm btn-outline-primary">View Task Details</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow mt-4">
+            <div class="card-header bg-info text-white">
+                <h4 class="mb-0"><i class="fas fa-info-circle me-2"></i>About This Tool</h4>
+            </div>
+            <div class="card-body">
+                <p>This tool automatically generates beautiful lyric videos with AI-generated imagery that perfectly matches song lyrics.</p>
+                <ul>
+                    <li><i class="fas fa-check text-success me-2"></i>Automatic song search and audio download</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Timestamped lyrics segmentation</li>
+                    <li><i class="fas fa-check text-success me-2"></i>AI-driven creative direction</li>
+                    <li><i class="fas fa-check text-success me-2"></i>High-quality image generation</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Professional video assembly</li>
+                </ul>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Note:</strong> This tool requires songs with timestamped lyrics.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="fas fa-list-ul me-2"></i>Recent Tasks</h4>
+            </div>
+            <div class="card-body">
+                <div id="queue-info" class="alert alert-light mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong>Queue Status:</strong>
+                        <span class="badge bg-primary" id="queue-count">Loading...</span>
+                    </div>
+                    <div class="progress mt-2">
+                        <div id="queue-progress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+                
+                {% if tasks %}
+                    <div class="list-group">
+                    {% for task in tasks %}
+                        <a href="{{ url_for('main.task_detail', task_id=task.id) }}" 
+                           class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1 text-truncate" style="max-width: 70%;">{{ task.song_query }}</h5>
+                                {% if task.status.value == 'completed' %}
+                                    <span class="badge bg-success">Completed</span>
+                                {% elif task.status.value == 'processing' %}
+                                    <span class="badge bg-primary">Processing</span>
+                                {% elif task.status.value == 'pending' %}
+                                    <span class="badge bg-secondary">Pending</span>
+                                {% elif task.status.value == 'failed' %}
+                                    <span class="badge bg-danger">Failed</span>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">
+                                Created {{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                            </small>
+                            
+                            {% if task.video %}
+                                <div class="mt-2">
+                                    <a href="{{ url_for('main.video_player', video_id=task.video.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-play me-1"></i> Watch Video
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </a>
+                    {% endfor %}
+                    </div>
+                    
+                    <div class="mt-3">
+                        <a href="{{ url_for('main.tasks') }}" class="btn btn-outline-primary">View All Tasks</a>
+                    </div>
+                {% else %}
+                    <div class="alert alert-light">
+                        <p class="mb-0">No tasks have been created yet. Be the first to generate a lyric video!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Function to update queue status
+    function updateQueueStatus() {
+        $.ajax({
+            url: "{{ url_for('api.queue_status') }}",
+            type: "GET",
+            success: function(data) {
+                // Update queue count
+                var totalJobs = data.queue.queued + data.queue.active;
+                $("#queue-count").text(totalJobs + " task(s) in queue");
+                
+                // Update progress bar
+                if (totalJobs > 0) {
+                    var width = (data.queue.active / totalJobs) * 100;
+                    $("#queue-progress").css("width", width + "%");
+                } else {
+                    $("#queue-progress").css("width", "0%");
+                }
+                
+                // Schedule next update
+                setTimeout(updateQueueStatus, 5000);
+            },
+            error: function() {
+                // If error, try again in 10 seconds
+                setTimeout(updateQueueStatus, 10000);
+            }
+        });
+    }
+    
+    // Start updating queue status
+    updateQueueStatus();
+    
+    // Handle form submission
+    $("#song-form").submit(function(e) {
+        e.preventDefault();
+        
+        var songQuery = $("#song-query").val();
+        if (!songQuery) {
+            alert("Please enter a song name and artist");
+            return;
+        }
+        
+        // Disable form
+        $("#song-form button").prop("disabled", true).html(
+            '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...'
+        );
+        
+        // Submit the task
+        $.ajax({
+            url: "{{ url_for('api.create_task') }}",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({
+                song_query: songQuery
+            }),
+            success: function(data) {
+                // Show status area
+                $("#task-status-area").removeClass("d-none");
+                
+                // Update task info
+                $("#task-id").text(data.task.id);
+                $("#task-status").text(data.task.status);
+                $("#task-detail-link").attr("href", "{{ url_for('main.task_detail', task_id=0) }}".replace("0", data.task.id));
+                
+                // Re-enable form with success message
+                $("#song-form button").removeClass("btn-primary").addClass("btn-success")
+                    .html('<i class="fas fa-check me-1"></i> Task Submitted!');
+                
+                // Refresh page after 3 seconds
+                setTimeout(function() {
+                    window.location.reload();
+                }, 3000);
+            },
+            error: function(xhr) {
+                // Re-enable form
+                $("#song-form button").prop("disabled", false)
+                    .html('<i class="fas fa-play me-1"></i> Generate Video');
+                
+                // Show error
+                alert("Error submitting task: " + (xhr.responseJSON ? xhr.responseJSON.error : "Unknown error"));
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

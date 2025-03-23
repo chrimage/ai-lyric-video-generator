@@ -10,6 +10,7 @@ Generate beautiful lyric videos with AI-generated imagery that perfectly matches
 - High-quality image generation for each lyric segment
 - Professional video assembly with smooth transitions
 - Organized output structure for all generated assets
+- **NEW: Web interface for task submission and video viewing**
 
 ## Installation
 
@@ -64,6 +65,24 @@ python demo.py
 --help               Show help message and exit
 ```
 
+## Web Interface (New!)
+
+A new web interface has been added to allow for easier task management and video viewing:
+
+1. Install additional web dependencies:
+```bash
+pip install -r requirements-web.txt
+```
+
+2. Start the web server:
+```bash
+python app.py runserver
+```
+
+3. Open your web browser and navigate to http://localhost:5000
+
+See [WEB_README.md](WEB_README.md) for detailed instructions on setting up and using the web interface.
+
 ## Project Structure
 
 ### Directory Structure
@@ -79,6 +98,10 @@ ai-lyric-video-generator/
 ├── lib/                     # Utility libraries
 │   └── song_utils.py        # Core utilities for song search and lyrics retrieval
 ├── demo.py                  # Quick demo script
+├── web/                     # Web interface package
+│   ├── templates/           # HTML templates
+│   └── static/              # Static files (CSS, JS)
+├── app.py                   # Web application entry point
 └── examples/                # Example scripts demonstrating individual components
 ```
 
@@ -125,6 +148,7 @@ output/
 - For better directory organization, format queries as "Artist - Song Title" 
 - If image generation fails, the system will retry with alternate approaches
 - Check the log file (lyric_videos.log) for detailed error information
+- For web interface issues, see the troubleshooting section in WEB_README.md
 
 ## License
 
