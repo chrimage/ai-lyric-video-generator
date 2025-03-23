@@ -40,6 +40,10 @@ task_*/
 _temp_*/
 examples/
 
+# Allow web templates
+!web/templates/
+!web/templates/**
+
 # Media and generated files
 *.mp3
 *.mp4

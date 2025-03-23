@@ -53,10 +53,35 @@ def task_detail(task_id):
     except Exception as e:
         print(f"Error getting task status: {e}")
     
+    # Get creative process data if video exists
+    creative_data = None
+    image_files = None
+    if task.video and task.video.creative_process:
+        creative_data = task.video.get_creative_data()
+        
+        # Get a list of preview images (up to 3) from the images directory
+        if task.video.images_dir and os.path.exists(os.path.join(current_app.config['BASE_DIR'], task.video.images_dir)):
+            temp_files = []
+            for filename in os.listdir(os.path.join(current_app.config['BASE_DIR'], task.video.images_dir)):
+                if filename.endswith(('.png', '.jpg', '.jpeg')):
+                    try:
+                        # Extract sequence number from filenames like "001_lyrics.png"
+                        seq_num = int(filename.split('_')[0])
+                        temp_files.append((seq_num, filename))
+                    except:
+                        # Fallback if no sequence number
+                        temp_files.append((999, filename))
+            
+            # Sort by sequence number and get first 3
+            temp_files.sort()
+            image_files = [file[1] for file in temp_files[:3]]
+    
     return render_template('task_detail.html', 
                           task=task, 
                           job_status=job_status, 
-                          queue_position=queue_position)
+                          queue_position=queue_position,
+                          creative_data=creative_data,
+                          image_files=image_files)
 
 @main_bp.route('/video/<int:video_id>')
 def video_player(video_id):

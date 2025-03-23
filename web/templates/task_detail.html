@@ -118,7 +118,69 @@
                                              class="img-fluid" alt="Video thumbnail">
                                     </a>
                                 </div>
+                                <div class="card-footer">
+                                    <a href="{{ url_for('main.creative_process', video_id=task.video.id) }}" 
+                                       class="btn btn-outline-primary">
+                                        <i class="fas fa-magic me-1"></i> View Creative Process
+                                    </a>
+                                </div>
                             </div>
+
+                            {% if creative_data and creative_data.video_concept %}
+                            <div class="card mt-3">
+                                <div class="card-header bg-dark text-white">
+                                    <h5 class="mb-0"><i class="fas fa-lightbulb text-warning me-2"></i>Video Concept</h5>
+                                </div>
+                                <div class="card-body">
+                                    <p>{{ creative_data.video_concept }}</p>
+                                    
+                                    {% if creative_data.image_descriptions and creative_data.image_descriptions|length > 0 %}
+                                    <hr>
+                                    <h6><i class="fas fa-comment-alt me-2"></i>Selected Lyric Interpretations</h6>
+                                    <div class="accordion" id="lyricsAccordion">
+                                        {% for item in creative_data.image_descriptions[:3] %}
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" 
+                                                        data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}">
+                                                    "{{ item.text }}"
+                                                </button>
+                                            </h2>
+                                            <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" 
+                                                 data-bs-parent="#lyricsAccordion">
+                                                <div class="accordion-body">
+                                                    {{ item.description }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if image_files %}
+                                    <hr>
+                                    <h6><i class="fas fa-images me-2"></i>Preview Images</h6>
+                                    <div class="row">
+                                        {% for image in image_files %}
+                                        <div class="col-md-4 mb-3">
+                                            <div class="card">
+                                                <img src="{{ url_for('main.media_file', filename=task.video.images_dir + '/' + image) }}" 
+                                                     alt="Generated image" class="img-fluid">
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <div class="text-center mt-3">
+                                        <a href="{{ url_for('main.creative_process', video_id=task.video.id) }}" 
+                                           class="btn btn-primary">
+                                            <i class="fas fa-magic me-1"></i> See Full Creative Process
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
                         {% endif %}
                     {% elif task.status.value == 'failed' %}
                         <div class="alert alert-danger">
