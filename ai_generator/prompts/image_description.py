@@ -1,89 +1,61 @@
 """
-Prompt template for generating image descriptions
+Prompt template for generating image descriptions based on a structured video concept.
 """
 
 IMAGE_DESCRIPTION_PROMPT = """
-You are creating still images for a lyric video for "{song_title}" by "{artists}".
-The overall concept for this video is:
+You are an AI assistant creating image descriptions for a lyric video for the song "{song_title}" by "{artists}".
+Follow the established creative direction meticulously.
 
-{video_concept}
+--- CREATIVE DIRECTION ---
+Visual Style: {visual_style}
+Color Palette: {color_palette_desc} (Dominant colors: {color_palette_colors})
+Key Themes/Motifs: {key_themes_or_motifs}
+Overall Concept: {overall_concept}
+--- END CREATIVE DIRECTION ---
 
-IMPORTANT GUIDELINES FOR VISUAL CONTINUITY:
-1. This is a sequence of images shown in chronological order, telling a visual story
-2. Create a clear visual progression and continuity between all images
-3. Maintain consistent visual style, color palette, and motifs throughout
-4. For instrumental segments (no lyrics), create transitional scenes that connect the narrative
-5. Each image should make sense in relation to what came before and after it
+IMPORTANT GUIDELINES FOR VISUAL CONTINUITY & STYLE:
+1. STRICTLY adhere to the specified Visual Style, Color Palette, and Key Themes/Motifs in EVERY description.
+2. This is a sequence of still images shown chronologically. Imply visual progression subtly.
+3. For instrumental segments (no lyrics), create atmospheric or transitional scenes that fit the narrative and style, incorporating the Key Themes/Motifs.
+4. Ensure each image description makes sense visually and thematically within the overall concept.
 
-Below is a numbered list of segments from the song. Create an image description for each numbered segment.
+Below is a numbered list of segments from the song. Create a detailed image description for EACH numbered segment.
 
-SEGMENTS:
+--- SONG SEGMENTS ---
 {segments_text}
+--- END SONG SEGMENTS ---
 
 For each segment, provide ONLY the image description as a numbered list matching the segment numbers above.
 
 ⚠️ ABSOLUTELY CRITICAL REQUIREMENT - SELF-CONTAINED DESCRIPTIONS ⚠️
-* Each description must be treated as if it will be processed COMPLETELY INDEPENDENTLY without any access to other descriptions
-* The AI generating each image will have NO KNOWLEDGE of any other images in the sequence
-* ❌ CRITICAL ERROR: NEVER use phrases like "from the previous image", "same as before", "continues the scene", "once again", "still wearing", etc.
-* ❌ CRITICAL ERROR: NEVER say "the clockwork crown from the previous image", "the same character as before", "similar to image X", etc.
-* ❌ CRITICAL ERROR: NEVER reference other images by their number or mention previous or future images at all
-* ❌ CRITICAL ERROR: NEVER reference characters, objects, or elements without fully describing them in each image
-* ❌ CRITICAL ERROR: If the same crown, character, or element appears in multiple images, describe it completely each time as if it's the first time it appears
-* ❌ CRITICAL ERROR: NEVER use "the" to describe something that hasn't been introduced within this description
-* IMAGINE: Each description will be given to a completely different artist who can only see that one description and nothing else
-* IMAGINE: I will feed each description into a separate, independent image generator that has no memory or knowledge of any other images
-* This is not a storyboard where one image builds off another - each is ENTIRELY self-contained
+* Each description MUST be 100% self-contained and understandable in complete isolation.
+* The AI generating each image will have NO KNOWLEDGE of any other images or descriptions.
+* ❌ CRITICAL ERROR: NEVER use phrases like "from the previous image", "same as before", "continues the scene", "still wearing", "the character", "the object", etc., unless the object/character is FULLY re-described within that same description.
+* ❌ CRITICAL ERROR: NEVER reference other images by number or context (e.g., "similar to image 3", "like we saw earlier").
+* ❌ CRITICAL ERROR: If a recurring element (e.g., a specific crown, a unique tree) appears, describe it COMPLETELY every single time as if it's the first time. Example: Instead of "The crown again", write "An ornate clockwork crown made of brass gears and glowing blue tubes sits..."
+* ❌ CRITICAL ERROR: Avoid using "the" to refer to something not explicitly introduced *within the current description*. Use "a" or descriptive adjectives instead.
+* IMAGINE: Each description is given to a different artist who sees only that one description.
+* IMAGINE: Each description feeds an independent image generator with no memory.
 
-SPECIFICALLY PROHIBITED PHRASES (WILL CAUSE ERRORS):
-- "from the previous image"
-- "same as before/earlier"
-- "as seen earlier"
-- "continuing the scene"
-- "the [anything] from [any other image]"
-- "still [doing anything]"
-- "once again"
-- "previously"
-- "returning to"
-- "the same [anything]"
-- "again"
-- "mentioned earlier"
-- "now [doing something]"
-- "image #"
-- "in the last/previous frame/scene/image"
-- "consistent with the [anything]"
+SPECIFICALLY PROHIBITED PHRASES (WILL CAUSE MAJOR ERRORS):
+- "from the previous image", "same as before", "as seen earlier", "continuing the scene", "the [anything] from [any other image]", "still [doing anything]", "once again", "previously", "returning to", "the same [anything]", "again", "mentioned earlier", "now [doing something]", "image #", "in the last/previous frame/scene/image", "consistent with the [anything]"
 
 IMPORTANT INSTRUCTIONS:
-- For segments with lyrics, the text MUST be visually incorporated into the scene in a creative way
-- Fully describe every visual element as if it's being introduced for the first time in each image
-- For recurring elements: Instead of "The clockwork crown from before," write "A detailed clockwork crown with intricate gold and silver gears"
-- For visual progression, use distinct descriptions that imply a narrative without directly referencing other images
-- Concrete example: Instead of "The same forest path, now with moonlight" write "A serene forest path illuminated by silvery moonlight filtering through ancient oak trees"
+- Integrate the specified Visual Style, Color Palette, and Key Themes/Motifs into every description.
+- For segments with lyrics, the text MUST be visually incorporated into the scene in a creative way that matches the style (e.g., carved into stone, projected onto fog, formed by stars, part of a digital display). Describe *how* the text appears.
+- Fully describe every visual element as if it's being introduced for the first time in each image.
+- Use vivid, descriptive language suitable for an image generation model.
 
-HANDLING SENSITIVE LYRICS:
-- When dealing with provocative, violent, explicit, or adult-themed lyrics, use sophisticated artistic techniques:
-  * Use metaphors and symbolism to convey the emotional impact rather than literal depictions
-  * Employ abstract visual representations that capture the feeling without explicit content
-  * Use silhouettes, shadows, artistic lighting, and creative framing
-  * Focus on the broader themes, emotions, and artistic meaning behind the lyrics
-  * Transform potentially problematic concepts into visually poetic, artistic interpretations
-  * Consider visual allegories, surrealism, or stylized representations that preserve artistic intent
-- STRICTLY AVOID:
-  * Any gore, blood, wounds, or physical injuries
-  * Macabre or morbid imagery like graveyards, coffins, dead bodies
-  * Disturbing, frightening, or excessively dark imagery
-  * Weapons shown in threatening contexts
-  * Anything that depicts suffering or pain
-- Instead, for dark themes:
-  * Use symbolic representations like withered flowers instead of death imagery
-  * Employ abstract color schemes (dark blues/purples) to convey mood
-  * Use weather elements (storms, lightning) to represent conflict or tension
-  * Incorporate symbolic objects (broken glass, chains breaking) instead of explicit violence
-- Remember that artistic expression can be powerful without being explicit
-- Think like a creative director for a music video that needs to air on television
+HANDLING SENSITIVE LYRICS (Apply Artistic Interpretation):
+- If lyrics are provocative, violent, explicit, or adult-themed, DO NOT depict them literally.
+- Use sophisticated artistic techniques: metaphors, symbolism, abstract visuals, silhouettes, shadows, creative framing, focus on emotion.
+- Transform problematic concepts into visually poetic, artistic interpretations aligned with the overall style and themes.
+- STRICTLY AVOID: Gore, blood, wounds, injuries, macabre/morbid imagery (graveyards, coffins, dead bodies, skulls), disturbing/frightening visuals, weapons in threatening contexts, depictions of suffering/pain.
+- Instead, for dark themes: Use symbolic representations (withered flowers, broken glass, storms, chains breaking), abstract color schemes (dark blues/purples), weather elements, symbolic objects.
+- Think like a creative director for a broadcast-safe music video. Express the *essence* artistically.
 
-Your response should be formatted EXACTLY like this:
-1. [Detailed image description for segment 1]
-2. [Detailed image description for segment 2]
+Your response must be formatted EXACTLY like this, providing only the numbered descriptions:
+1. [Detailed, self-contained image description for segment 1, adhering to style, palette, themes]
+2. [Detailed, self-contained image description for segment 2, adhering to style, palette, themes]
 ...
 """

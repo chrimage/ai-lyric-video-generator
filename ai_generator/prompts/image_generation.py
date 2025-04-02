@@ -1,50 +1,44 @@
 """
-Prompt template for generating images
+Prompt template for generating images based on a detailed description.
 """
 
 IMAGE_GENERATION_PROMPT = """
-Create a high-quality still image for a lyric video with the following description:
+Generate a single, high-quality, visually striking still image based *only* on the following detailed description. This image is for one frame of a lyric video.
 
+--- DESCRIPTION ---
 {description}
-
-IMPORTANT: This image is completely independent and must make sense on its own without any context from other images. It MUST fully depict everything described in the prompt without relying on or referencing any other images.
+--- END DESCRIPTION ---
 
 CRITICAL REQUIREMENTS:
-- Create EXACTLY what is described in the prompt
-- Do not assume any knowledge of previous images or scenes
-- Treat this as a completely standalone, independent image
-- Include all elements mentioned in the description
-- This is for a single frame in a lyric video
+1.  **Standalone Image:** Create EXACTLY what is described above. Assume NO context from any other images or descriptions. This image must be fully understandable on its own.
+2.  **Completeness:** Include ALL visual elements, styles, colors, themes, and text placements mentioned in the description.
+3.  **Aspect Ratio:** Generate the image in a 16:9 aspect ratio (e.g., 1280x720 pixels).
+4.  **No Humans/Faces:** Unless explicitly requested and described in detail, avoid depicting realistic human figures or faces. Stylized or abstract representations are acceptable if described.
+5.  **Text Readability:** If the description includes incorporating lyric text, ensure it is clearly readable and integrated aesthetically according to the specified style.
+6.  **Artistic Style:** Strictly adhere to the artistic style mentioned in the description (e.g., watercolor, neon noir, abstract).
 
-The image should:
-- Be in 16:9 aspect ratio (1280x720 or similar)
-- Have high contrast and readability for any text elements
-- Be visually striking and suitable for a music video
-- No humans or faces should be included
-- Contain all visual elements fully described in the prompt above
-- Use a consistent artistic style throughout the entire image
+NEGATIVE PROMPTS (AVOID THESE):
+- Blurry or out-of-focus images
+- Watermarks, signatures, or text unrelated to the description
+- Multiple panels or collage-style images (generate only ONE single image)
+- Generic or low-effort backgrounds unless specified
+- Elements not mentioned in the description
+- Assuming context from potential previous images (e.g., "continuing the scene")
 
-ARTISTIC GUIDANCE FOR SENSITIVE CONTENT:
-If the description contains provocative, violent, explicit, or adult-themed references:
-- Use abstract artistic interpretations rather than literal depictions
-- Employ metaphors, symbolism, and visual poetry to convey emotional impact
-- Focus on mood, atmosphere, and artistic expression rather than explicit content
-- Use creative techniques like silhouettes, shadows, artistic lighting
-- Transform potentially problematic elements into artistic visual metaphors
-- Think in terms of award-winning music video aesthetics that convey meaning through artistic expression
-- Find the deeper emotional theme and express it through color, composition, and symbolic imagery
+ARTISTIC GUIDANCE FOR SENSITIVE CONTENT (If applicable based on description):
+- If the description hints at sensitive themes (violence, adult content, etc.), interpret it ARTISTICALLY and ABSTRACTLY.
+- Use metaphors, symbolism, color, light, and composition to convey the *emotion* or *essence* without literal or explicit depiction.
+- Employ techniques like silhouettes, shadows, suggestive framing, or symbolic objects.
+- Transform potentially problematic concepts into visually poetic, broadcast-safe artistic statements.
+- Focus on mood and atmosphere.
 
-STRICTLY AVOID creating images with:
-- Any gore, blood, wounds, physical injuries or bodily harm
-- Macabre or morbid imagery (graveyards, coffins, dead bodies, skulls)
-- Disturbing, frightening, horror-themed or excessively dark visuals
-- Weapons shown in threatening or violent contexts
-- Imagery depicting suffering, torture, or physical/emotional pain
+STRICTLY AVOID generating images containing:
+- Gore, blood, wounds, explicit violence, physical harm.
+- Macabre or morbid elements (realistic skulls, dead bodies, etc.).
+- Disturbing, frightening, or horror content.
+- Weapons used threateningly.
+- Depictions of suffering or pain.
+- Anything violating safety guidelines for general audiences.
 
-For dark or intense themes, instead use:
-- Symbolic imagery (withered flowers, broken objects, stormy skies)
-- Abstract color schemes and lighting to convey emotional tone
-- Natural elements (weather, landscapes) to represent emotional states
-- Visual symbolism that suggests themes without explicit depiction
-- Artistic stylization that transforms literal content into abstract concepts
+Generate the image now based SOLELY on the provided description.
 """

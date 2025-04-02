@@ -1,0 +1,340 @@
+{% extends "layout.html" %}
+
+{% block title %}Creative Process: {{ video.title }} - AI Lyric Video Generator{% endblock %}
+
+{% block head %}
+<style>
+    .creative-section {
+        margin-bottom: 2rem;
+    }
+    
+    .concept-card {
+        background-color: #f8f9fa;
+        border-left: 5px solid #6c5ce7;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border-radius: 0.5rem;
+    }
+    
+    .description-card {
+        background-color: #fafafa;
+        border-radius: 0.5rem;
+        border: 1px solid #ddd;
+        padding: 1rem;
+        transition: transform 0.2s;
+        height: 100%;
+    }
+    
+    .description-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .lyric-text {
+        font-weight: bold;
+        color: #2d3436;
+        font-size: 1.1rem;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .description-text {
+        color: #636e72;
+        font-style: italic;
+    }
+    
+    .timeline-section {
+        position: relative;
+        padding-left: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .timeline-section::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 4px;
+        background: linear-gradient(to bottom, #6c5ce7, #a29bfe);
+        border-radius: 2px;
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 1.5rem;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -2.3rem;
+        top: 0.25rem;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #6c5ce7;
+        border: 2px solid #fff;
+    }
+    
+    .image-gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .gallery-item {
+        border-radius: 0.5rem;
+        overflow: hidden;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        transition: transform 0.3s;
+    }
+    
+    .gallery-item:hover {
+        transform: scale(1.03);
+    }
+    
+    .gallery-item img {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+    
+    .concept-badge {
+        background-color: #6c5ce7;
+        color: white;
+        padding: 0.2rem 0.6rem;
+        border-radius: 1rem;
+        font-size: 0.8rem;
+        margin-right: 0.5rem;
+    }
+    
+    .section-title {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    .section-title::after {
+        content: '';
+        flex-grow: 1;
+        margin-left: 1rem;
+        height: 1px;
+        background-color: #ddd;
+    }
+    
+    .image-caption {
+        padding: 0.5rem;
+        background-color: #f8f9fa;
+        font-size: 0.9rem;
+        color: #2d3436;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('main.task_detail', task_id=video.task_id) }}">Task #{{ video.task_id }}</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('main.video_player', video_id=video.id) }}">Video Player</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Creative Process</li>
+    </ol>
+</nav>
+
+<div class="row">
+    <div class="col-md-9">
+        <h1 class="display-5">{{ video.title }}</h1>
+        <h3 class="text-muted">by {{ video.artist }}</h3>
+    </div>
+    <div class="col-md-3 text-md-end">
+        <a href="{{ url_for('main.video_player', video_id=video.id) }}" class="btn btn-primary mt-3">
+            <i class="fas fa-play-circle me-2"></i>Watch Video
+        </a>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0"><i class="fas fa-magic me-2"></i>AI Creative Process</h4>
+                <div class="text-muted">Explore how AI generated this lyric video</div>
+            </div>
+            <div class="card-body">
+                <p class="lead">
+                    This page reveals the creative journey of generating this lyric video. 
+                    See how AI interpreted lyrics into visual concepts and images.
+                </p>
+                
+                {% if creative_data and creative_data.video_concept %}
+                    <div class="creative-section">
+                        <h4 class="section-title">
+                            <i class="fas fa-lightbulb text-warning me-2"></i>
+                            Video Concept
+                        </h4>
+                        <div class="concept-card">
+                            <div class="mb-3">
+                                <div>
+                                    {% for keyword in creative_data.video_concept.split(',')[:5] %}
+                                        <span class="concept-badge">{{ keyword.strip() }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <p class="lead">{{ creative_data.video_concept }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                {% if creative_data and creative_data.image_descriptions %}
+                    <div class="creative-section">
+                        <h4 class="section-title">
+                            <i class="fas fa-comment-alt text-primary me-2"></i>
+                            Lyric Interpretations
+                        </h4>
+                        
+                        <div class="timeline-section">
+                            {% for item in creative_data.image_descriptions[:5] %}
+                                <div class="timeline-item">
+                                    <div class="card shadow-sm">
+                                        <div class="card-body">
+                                            <div class="lyric-text">
+                                                <i class="fas fa-quote-left text-muted me-2 small"></i>
+                                                {{ item.text }}
+                                                <i class="fas fa-quote-right text-muted ms-2 small"></i>
+                                            </div>
+                                            <div class="description-text">
+                                                {{ item.description }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            
+                            {% if creative_data.image_descriptions|length > 5 %}
+                                <div class="text-center mt-3">
+                                    <button class="btn btn-outline-primary" type="button" data-bs-toggle="collapse" 
+                                            data-bs-target="#moreDescriptions" aria-expanded="false">
+                                        Show {{ creative_data.image_descriptions|length - 5 }} More Interpretations
+                                    </button>
+                                </div>
+                                
+                                <div class="collapse" id="moreDescriptions">
+                                    {% for item in creative_data.image_descriptions[5:] %}
+                                        <div class="timeline-item mt-3">
+                                            <div class="card shadow-sm">
+                                                <div class="card-body">
+                                                    <div class="lyric-text">
+                                                        <i class="fas fa-quote-left text-muted me-2 small"></i>
+                                                        {{ item.text }}
+                                                        <i class="fas fa-quote-right text-muted ms-2 small"></i>
+                                                    </div>
+                                                    <div class="description-text">
+                                                        {{ item.description }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+                
+                {% if image_files %}
+                    <div class="creative-section">
+                        <h4 class="section-title">
+                            <i class="fas fa-images text-success me-2"></i>
+                            Generated Images
+                        </h4>
+                        
+                        <div class="image-gallery">
+                            {% for image in image_files[:12] %}
+                                <div class="gallery-item">
+                                    <img src="{{ url_for('main.media_file', filename=video.images_dir + '/' + image) }}" 
+                                         alt="Generated image for {{ video.title }}" 
+                                         class="img-fluid">
+                                    <div class="image-caption">
+                                        {% set image_name = image.split('_', 1)[1].rsplit('.', 1)[0] if '_' in image else image %}
+                                        {{ image_name|replace('_', ' ') }}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        
+                        {% if image_files|length > 12 %}
+                            <div class="text-center mt-3">
+                                <button class="btn btn-outline-success" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#moreImages" aria-expanded="false">
+                                    Show {{ image_files|length - 12 }} More Images
+                                </button>
+                            </div>
+                            
+                            <div class="collapse" id="moreImages">
+                                <div class="image-gallery mt-3">
+                                    {% for image in image_files[12:] %}
+                                        <div class="gallery-item">
+                                            <img src="{{ url_for('main.media_file', filename=video.images_dir + '/' + image) }}" 
+                                                 alt="Generated image for {{ video.title }}" 
+                                                 class="img-fluid">
+                                            <div class="image-caption">
+                                                {% set image_name = image.split('_', 1)[1].rsplit('.', 1)[0] if '_' in image else image %}
+                                                {{ image_name|replace('_', ' ') }}
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if timeline_data %}
+    <div class="card shadow mt-4">
+        <div class="card-header bg-dark text-white">
+            <h4 class="mb-0"><i class="fas fa-clock me-2"></i>Timeline Data</h4>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                This timeline data shows how each lyric segment is timed in the video.
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Lyrics</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for segment in timeline_data.segments %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ segment.text }}</td>
+                                <td>{{ "%d:%02d.%03d"|format(segment.start_time // 60, segment.start_time % 60, 
+                                                               (segment.start_time * 1000) % 1000) }}</td>
+                                <td>{{ "%d:%02d.%03d"|format(segment.end_time // 60, segment.end_time % 60, 
+                                                               (segment.end_time * 1000) % 1000) }}</td>
+                                <td>{{ "%.2f"|format(segment.duration) }} sec</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+{% endblock %}

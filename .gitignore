@@ -39,6 +39,7 @@ downloads/
 task_*/
 _temp_*/
 examples/
+generated_images_test/
 
 # Allow web templates
 !web/templates/
@@ -70,4 +71,3 @@ examples/
 *.db
 web/static/uploads/
 web/app.db
-instance/

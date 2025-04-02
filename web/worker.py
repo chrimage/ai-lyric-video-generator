@@ -279,11 +279,11 @@ def reload_pending_tasks(config):
 def start_worker_thread(config):
     """Start the worker thread if it's not already running"""
     global worker_thread, worker_running
-    
-    # First reload any pending tasks
-    reload_pending_tasks(config)
-    
+
     if worker_thread is None or not worker_thread.is_alive():
+        # Only reload pending tasks when the worker is actually starting
+        reload_pending_tasks(config)
+
         worker_thread = threading.Thread(
             target=worker_loop,
             args=(config,),

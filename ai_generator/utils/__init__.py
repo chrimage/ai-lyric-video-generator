@@ -1,15 +1,40 @@
 """
-Utility functions for AI generator
+Utility functions for AI generator, including logging setup.
 """
 import time
 import random
 import textwrap
 import logging
+import sys
 from typing import Callable, Any, Optional
 
-
-# Configure logger
+# --- Logging Setup ---
+# Check if logger is already configured (e.g., by Flask app)
 logger = logging.getLogger('ai_generator')
+
+# Configure only if no handlers are present
+if not logger.handlers:
+    logger.setLevel(logging.INFO) # Set default level (can be overridden by env var or config)
+
+    # Create handler (console)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO) # Set handler level
+
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    handler.setFormatter(formatter)
+
+    # Add handler to the logger
+    logger.addHandler(handler)
+
+    # Prevent propagation to root logger if it has handlers (like Flask's default)
+    # logger.propagate = False # Keep propagation for now, might be useful
+
+    logger.info("AI Generator logger configured.")
+# --- End Logging Setup ---
 
 
 def retry_api_call(
@@ -53,17 +78,21 @@ def retry_api_call(
             time.sleep(sleep_time)
 
 
-def format_text_display(text: str, width: int = 76) -> None:
+def format_text_display(text: str, width: int = 76) -> str:
     """
-    Format and print text with wrapping
-    
+    Format text with wrapping.
+
     Args:
-        text: The text to format and print
-        width: The width to wrap at
+        text: The text to format.
+        width: The width to wrap at.
+
+    Returns:
+        The wrapped text as a single string with newline characters.
     """
-    wrapped = textwrap.fill(text, width=width)
-    for line in wrapped.split('\n'):
-        print(f"  {line}")
+    if not isinstance(text, str): # Add basic type check for safety
+        logger.warning(f"format_text_display received non-string input: {type(text)}. Returning empty string.")
+        return ""
+    return textwrap.fill(text, width=width)
 
 
 def extract_quoted_text(text: str) -> Optional[str]:

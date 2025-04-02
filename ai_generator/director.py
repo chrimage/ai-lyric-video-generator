@@ -2,213 +2,233 @@
 Video Creative Director - Generates creative concepts for lyric videos
 """
 import time
-from typing import Optional
+import json
+import random
+from typing import Optional, Dict, Any
 
 from ai_generator.config import GEMINI_API_KEY, AVAILABLE_API, THINKING_MODEL, client
 from ai_generator.prompts import VIDEO_CONCEPT_PROMPT
-from ai_generator.utils import retry_api_call, format_text_display
+from ai_generator.utils import retry_api_call, format_text_display, logger
 from lyrics_segmenter import LyricsTimeline
 
 try:
     from google.genai import types
+    from google.api_core import exceptions as google_exceptions
 except ImportError:
     types = None
+    google_exceptions = None
 
 
 class VideoCreativeDirector:
-    """Generates a creative direction for the lyric video"""
-    
+    """Generates a creative direction (concept, style, themes) for the lyric video"""
+
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize the director with an API key
-        
-        Args:
-            api_key: Optional API key to override the default
-        """
+        """Initialize the director with an API key."""
         self.api_key = api_key or GEMINI_API_KEY
         self.api = AVAILABLE_API
-        
-        # Initialize client if different API key is provided
-        if api_key and api_key != GEMINI_API_KEY and types:
+
+        # Initialize client if different API key is provided or if default client is None
+        if (api_key and api_key != GEMINI_API_KEY and types) or (not client and self.api_key and types):
+            logger.info(f"Initializing Gemini client with provided/configured API key.")
             import google.genai as genai
-            self.client = genai.Client(api_key=self.api_key)
+            try:
+                self.client = genai.Client(api_key=self.api_key)
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini client: {e}")
+                self.client = None
+                self.api = "mock" # Fallback to mock if client fails
         else:
-            self.client = client
-    
-    def thinking_generate(self, prompt: str) -> str:
-        """
-        Generate content using a thinking model
-        
-        Args:
-            prompt: The prompt for the model
-            
-        Returns:
-            Generated text from the model
-        """
-        if self.client is None:
-            return "Error: No client available"
-        
-        # Use the thinking model with retries
-        def generate_with_thinking():
+            self.client = client # Use pre-configured client
+
+        if not self.client:
+            logger.warning("Gemini client not available. Director will use mock generation.")
+            self.api = "mock"
+
+    def _call_gemini_api(self, prompt: str, model: str, temperature: float = 0.3) -> Optional[str]:
+        """Internal helper to call the Gemini API with retry logic."""
+        if not self.client or not types:
+            logger.error("Gemini client or types not available for API call.")
+            return None
+
+        def api_call():
+            logger.debug(f"Calling Gemini model {model} with temperature {temperature}")
             response = self.client.models.generate_content(
-                model=THINKING_MODEL,
+                model=model,
                 contents=prompt,
-                # Add thinking configuration if supported by the model
                 config=types.GenerateContentConfig(
-                    temperature=0.2  # Lower temperature for more focused thinking
+                    temperature=temperature,
+                    # Ensure response is JSON if possible, although model should handle it based on prompt
+                    # response_mime_type="application/json" # Might cause issues if model doesn't strictly adhere
                 )
             )
-            
-            if response.candidates and response.candidates[0].content.parts:
+            # Basic check for response content
+            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                 # Check for safety blocks
+                if response.candidates[0].finish_reason == types.FinishReason.SAFETY:
+                    logger.warning(f"Gemini response blocked due to safety reasons. Prompt: {prompt[:100]}...")
+                    # You might want to raise a specific exception here or return a marker
+                    raise google_exceptions.PermissionDenied("Response blocked due to safety settings")
                 return response.candidates[0].content.parts[0].text
-            return "Error generating concept with thinking model"
-        
+            else:
+                logger.warning(f"Received empty or invalid response from Gemini model {model}.")
+                return None # Indicate empty response
+
         try:
-            return retry_api_call(generate_with_thinking)
+            # Use retry_api_call from utils
+            return retry_api_call(api_call)
+        except google_exceptions.PermissionDenied as e:
+             logger.error(f"Gemini API call failed due to safety settings: {e}")
+             # Handle safety blocks specifically, maybe return a specific error structure
+             return json.dumps({"error": "Response blocked by safety filters", "details": str(e)})
         except Exception as e:
-            print(f"Error with thinking model: {e}")
-            # Fall back to standard model
-            try:
-                def generate_with_standard():
-                    response = self.client.models.generate_content(
-                        model="models/gemini-2.0-flash",  # Fall back to standard flash model
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            temperature=0.2
-                        )
-                    )
-                    if response.candidates and response.candidates[0].content.parts:
-                        return response.candidates[0].content.parts[0].text
-                    return "Error generating concept with standard model"
-                
-                return retry_api_call(generate_with_standard)
-            except Exception as e2:
-                print(f"Error with fallback model: {e2}")
-            return "Error generating concept"
-    
-    def generate_video_concept(self, timeline: LyricsTimeline) -> str:
-        """
-        Generate a creative concept for the entire video
-        
-        Args:
-            timeline: The lyrics timeline object
-            
-        Returns:
-            A creative concept for the video
-        """
-        song_title = timeline.song_info['title']
-        artists = ', '.join(timeline.song_info['artists'])
-        
-        # Extract all lyrics text from segments
-        lyrics = []
-        for segment in timeline.segments:
-            if segment.segment_type == "lyrics":
-                lyrics.append(segment.text)
-        
+            logger.error(f"Gemini API call failed after retries for model {model}: {e}")
+            # Fallback or re-raise depending on desired behavior
+            return None # Indicate failure
+
+    def thinking_generate(self, prompt: str) -> Optional[str]:
+        """Generate content using the configured thinking model."""
+        logger.info(f"Generating content with thinking model: {THINKING_MODEL}")
+        result = self._call_gemini_api(prompt, THINKING_MODEL, temperature=0.3)
+        if result is None:
+             logger.warning("Thinking model failed, attempting fallback.")
+             # Fallback to a standard, reliable model if the thinking one fails
+             fallback_model = "models/gemini-1.5-flash-latest" # Or another suitable fallback
+             result = self._call_gemini_api(prompt, fallback_model, temperature=0.5)
+             if result is None:
+                 logger.error("Fallback model also failed.")
+                 return json.dumps({"error": "Concept generation failed with primary and fallback models."})
+        return result
+
+    def generate_video_concept(self, timeline: LyricsTimeline) -> Dict[str, Any]:
+        """Generate a structured creative concept for the video."""
+        song_title = timeline.song_info.get('title', 'Unknown Title')
+        artists = ', '.join(timeline.song_info.get('artists', ['Unknown Artist']))
+
+        lyrics = [seg.text for seg in timeline.segments if seg.segment_type == "lyrics"]
         full_lyrics = "\n".join(lyrics)
-        
-        if self.api == "gemini" and self.api_key:
-            return self._generate_concept_with_gemini(song_title, artists, full_lyrics)
+
+        if not full_lyrics:
+            logger.warning("No lyrics found in timeline segments. Cannot generate concept.")
+            return self._generate_mock_concept(song_title, artists) # Return mock if no lyrics
+
+        if self.api == "gemini" and self.client:
+            concept_data = self._generate_concept_with_gemini(song_title, artists, full_lyrics)
         else:
-            return self._generate_mock_concept(song_title, artists)
-    
-    def _generate_concept_with_gemini(self, song_title: str, artists: str, full_lyrics: str) -> str:
-        """
-        Generate video concept using Gemini API with thinking model
-        
-        Args:
-            song_title: The title of the song
-            artists: The artists' names
-            full_lyrics: The full lyrics text
-            
-        Returns:
-            A generated concept for the video
-        """
-        # Print a nice header to show we're generating the video concept
-        print("\n" + "="*80)
-        print("🎬 GENERATING VIDEO CONCEPT")
-        print("="*80)
-        print(f"🎵 Song: \"{song_title}\" by {artists}")
-        print(f"🧠 Using Gemini thinking model: {THINKING_MODEL}")
-        print("-"*80)
-        print("💭 Thinking about song themes, mood, and visual style...")
-        
-        # Format the prompt with song details
+            logger.info("Using mock concept generation.")
+            concept_data = self._generate_mock_concept(song_title, artists)
+
+        # Store the structured concept directly in the timeline object
+        timeline.video_concept = concept_data
+        return concept_data # Return the dictionary as well
+
+    def _generate_concept_with_gemini(self, song_title: str, artists: str, full_lyrics: str) -> Dict[str, Any]:
+        """Generate and parse video concept using Gemini API."""
+        logger.info(f"Generating video concept for '{song_title}' by {artists} using Gemini.")
         prompt = VIDEO_CONCEPT_PROMPT.format(
-            song_title=song_title,
-            artists=artists,
-            full_lyrics=full_lyrics
+            song_title=song_title, artists=artists, full_lyrics=full_lyrics
         )
-        
-        # Animated thinking process
-        for i in range(5):
-            time.sleep(0.4)
-            dots = "." * (i % 4 + 1)
-            spaces = " " * (3 - i % 4)
-            print(f"🧠 Thinking{dots}{spaces}", end="\r", flush=True)
-        
-        # Get the concept
-        concept = self.thinking_generate(prompt)
-        
-        # Show the concept
-        print("\n" + "-"*80)
-        print("✨ VIDEO CONCEPT GENERATED:")
-        print("-"*80)
-        
-        # Format the concept nicely with wrapping
-        format_text_display(concept)
-        
-        print("="*80 + "\n")
-        
-        return concept
-    
-    def _generate_mock_concept(self, song_title: str, artists: str) -> str:
-        """
-        Generate a mock concept for testing
-        
-        Args:
-            song_title: The title of the song
-            artists: The artists' names
-            
-        Returns:
-            A mock concept for the video
-        """
-        # Print a nice header to show we're using a mock concept
-        print("\n" + "="*80)
-        print("🎬 GENERATING MOCK VIDEO CONCEPT")
-        print("="*80)
-        print(f"🎵 Song: \"{song_title}\" by {artists}")
-        print(f"🔍 Using mock generation (API unavailable)")
-        print("-"*80)
-        print("🎨 Selecting from pre-defined artistic styles...")
-        
-        # Animated selection process
-        for i in range(3):
-            time.sleep(0.3)
-            dots = "." * (i % 3 + 1)
-            spaces = " " * (2 - i % 3)
-            print(f"🎲 Selecting style{dots}{spaces}", end="\r", flush=True)
-            
-        concepts = [
-            f"A neon-lit urban landscape for {song_title} by {artists}. Vibrant purple and blue hues dominate the visuals, with each scene featuring stylized city elements like skyscrapers, street lights, and reflective surfaces. The lyrics appear as glowing neon signs integrated into the urban environment.",
-            
-            f"A minimalist, paper-cut art style for {song_title} by {artists}. Each scene uses a limited palette of pastel colors with white space. Elements appear as carefully arranged paper cutouts with subtle shadows. Lyrics are handwritten in a flowing calligraphy that complements the delicate visual style.",
-            
-            f"A retro 80s synthwave aesthetic for {song_title} by {artists}. Sunset gradients of pink, purple and orange create the backdrop for grid-lined horizons and geometric shapes. Chrome text with glowing outlines presents the lyrics, while vintage computer graphics and wireframe objects populate each scene."
+
+        # Animated thinking process in logger
+        logger.info("💭 Thinking about song themes, mood, and visual style...")
+        # (Optional: Add a visual spinner/progress indicator if running interactively)
+
+        raw_response = self.thinking_generate(prompt)
+
+        if not raw_response:
+            logger.error("Received no response from concept generation API.")
+            return self._generate_mock_concept(song_title, artists) # Fallback to mock
+
+        # Attempt to parse the JSON response
+        try:
+            # Clean potential markdown code fences
+            if raw_response.strip().startswith("```json"):
+                raw_response = raw_response.strip()[7:-3].strip()
+            elif raw_response.strip().startswith("```"):
+                 raw_response = raw_response.strip()[3:-3].strip()
+
+            concept_data = json.loads(raw_response)
+            logger.info("Successfully parsed JSON concept from Gemini.")
+
+            # Basic validation
+            required_keys = ["overall_concept", "visual_style", "color_palette", "key_themes_or_motifs"]
+            if not all(key in concept_data for key in required_keys):
+                 logger.warning("Generated concept JSON is missing required keys. Falling back to mock.")
+                 return self._generate_mock_concept(song_title, artists)
+
+            # Log the generated concept details
+            logger.info("\n" + "="*80)
+            logger.info("✨ VIDEO CONCEPT GENERATED (Structured):")
+            logger.info(f"🎨 Style: {concept_data.get('visual_style', 'N/A')}")
+            logger.info(f"🎨 Palette: {concept_data.get('color_palette', 'N/A')}")
+            logger.info(f"🔑 Themes/Motifs: {', '.join(concept_data.get('key_themes_or_motifs', []))}")
+            logger.info("-" * 80)
+            logger.info("📝 Overall Concept:")
+            format_text_display(concept_data.get('overall_concept', 'N/A')) # Use util for nice printing
+            logger.info("="*80 + "\n")
+
+            return concept_data
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON response from concept generation: {e}")
+            logger.warning(f"Raw response was: {raw_response[:500]}...") # Log part of the raw response
+            # Fallback: Treat the raw response as the 'overall_concept' and generate mock structure
+            mock_data = self._generate_mock_concept(song_title, artists)
+            mock_data["overall_concept"] = raw_response # Use the actual response text
+            logger.info("Using raw response as concept description with mock structure.")
+            return mock_data
+        except Exception as e:
+             logger.error(f"An unexpected error occurred during concept processing: {e}")
+             return self._generate_mock_concept(song_title, artists)
+
+
+    def _generate_mock_concept(self, song_title: str, artists: str) -> Dict[str, Any]:
+        """Generate a mock structured concept for testing."""
+        logger.info(f"Generating mock video concept for '{song_title}' by {artists}.")
+
+        mock_styles = ['neon noir', 'watercolor dreamscape', 'vintage comic book', 'abstract data visualization']
+        mock_palettes = [
+            (["#4B0082", "#8A2BE2", "#E6E6FA", "#000000"], "Deep purples and blues with stark white highlights"),
+            (["#ADD8E6", "#FFB6C1", "#90EE90", "#FFFFE0"], "Soft pastels, light and airy"),
+            (["#FF0000", "#FFFF00", "#0000FF", "#000000"], "Primary colors with bold black outlines"),
+            (["#00FFFF", "#FF00FF", "#FFFFFF", "#333333"], "Cyberpunk cyan and magenta on dark gray")
         ]
-        
-        # Choose a random concept
-        import random
-        concept = random.choice(concepts)
-        
-        # Show the concept
-        print("\n" + "-"*80)
-        print("✨ MOCK VIDEO CONCEPT SELECTED:")
-        print("-"*80)
-        
-        # Format the concept nicely with wrapping
-        format_text_display(concept)
-        
-        print("="*80 + "\n")
-        
-        return concept
+        mock_themes = [
+            ['glowing circuits', 'rainy streets', 'digital code', 'reflections', 'isolated figures'],
+            ['floating islands', 'gentle rivers', 'soft clouds', 'whispering winds', 'dream catchers'],
+            ['action lines', 'halftone dots', 'speech bubbles', 'dynamic poses', 'city skylines'],
+            ['network graphs', 'glowing particles', 'data streams', 'geometric patterns', 'fractal shapes']
+        ]
+
+        idx = random.randrange(len(mock_styles))
+        style = mock_styles[idx]
+        palette_colors, palette_desc = mock_palettes[idx]
+        themes = random.sample(mock_themes[idx], k=min(5, len(mock_themes[idx]))) # Select 5 themes
+
+        concept_text = (
+            f"This is a mock concept for '{song_title}'. "
+            f"The visual style is '{style}', featuring {palette_desc}. "
+            f"Key themes include {', '.join(themes)}. "
+            f"The overall mood aims to be [mock mood - e.g., mysterious, ethereal, energetic, analytical] "
+            f"reflecting the mock interpretation of the song."
+        )
+
+        mock_data = {
+            "overall_concept": concept_text,
+            "visual_style": style,
+            "color_palette": (palette_colors, palette_desc), # Store both parts
+            "key_themes_or_motifs": themes,
+            "potential_genre_mood": "Mock Genre/Mood"
+        }
+
+        # Log the mock concept details
+        logger.info("\n" + "="*80)
+        logger.info("✨ MOCK VIDEO CONCEPT GENERATED (Structured):")
+        logger.info(f"🎨 Style: {mock_data['visual_style']}")
+        logger.info(f"🎨 Palette: {mock_data['color_palette'][1]}")
+        logger.info(f"🔑 Themes/Motifs: {', '.join(mock_data['key_themes_or_motifs'])}")
+        logger.info("-" * 80)
+        logger.info("📝 Overall Concept:")
+        format_text_display(mock_data['overall_concept'])
+        logger.info("="*80 + "\n")
+
+        return mock_data
