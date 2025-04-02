@@ -28,6 +28,7 @@ DEFAULT_BATCH_DELAY = 5.0
 MAX_REVISION_ATTEMPTS = 3
 MAX_API_RETRIES = 3  # Maximum retries for API calls facing rate limits (e.g., 429)
 INITIAL_BACKOFF_DELAY = 5.0 # Initial delay in seconds for exponential backoff
+GEMINI_IMAGE_RPM = 10 # Requests Per Minute limit for Gemini image generation model
 
 # Initialize Gemini client if available
 try:

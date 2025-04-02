@@ -6,6 +6,11 @@ import json
 from typing import List, Dict, Any, Optional, Tuple
 
 
+class LyricsError(Exception):
+    """Custom exception for lyrics processing errors."""
+    pass
+
+
 class LyricsSegment:
     """Represents a segment of lyrics with timing information"""
     def __init__(self, 

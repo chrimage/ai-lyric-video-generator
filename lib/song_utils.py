@@ -3,10 +3,30 @@
 Utility functions for song search, download, and lyrics retrieval
 """
 import os
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
 import yt_dlp
 from ytmusicapi import YTMusic
 
-def search_song(query):
+
+@dataclass
+class SongInfo:
+    """Represents information about a song."""
+    videoId: str
+    title: str
+    artists: List[str]
+    album: Optional[str]
+    duration: Optional[str]  # Keep as string for now as source format varies
+    thumbnails: List[Dict[str, Any]] = field(default_factory=list)
+    original_query: Optional[str] = None
+
+    def __post_init__(self):
+        """Ensure album is None if it's 'Unknown Album'."""
+        if self.album == 'Unknown Album':
+            self.album = None
+
+
+def search_song(query: str) -> Optional[SongInfo]:
     """Search for a song using ytmusicapi"""
     ytmusic = YTMusic()
     
@@ -30,21 +50,22 @@ def search_song(query):
     # Use information about the top result
     print(f"Using top result: '{search_results[0]['title']}' by {[artist['name'] for artist in search_results[0].get('artists', [])]}")
     
-    # Return information about the top result
+    # Use information about the top result
     top_result = search_results[0]
-    song_info = {
-        'videoId': top_result['videoId'],
-        'title': top_result['title'],
-        'artists': [artist['name'] for artist in top_result.get('artists', [])],
-        'album': top_result.get('album', {}).get('name', 'Unknown Album'),
-        'duration': top_result.get('duration', 'Unknown Duration'),
-        'thumbnails': top_result.get('thumbnails', []),
-        'original_query': query
-    }
-    
-    return song_info
 
-def download_audio(video_id, output_dir='downloads'):
+    # Create and return a SongInfo object
+    return SongInfo(
+        videoId=top_result['videoId'],
+        title=top_result['title'],
+        artists=[artist['name'] for artist in top_result.get('artists', [])],
+        album=top_result.get('album', {}).get('name'), # Let __post_init__ handle 'Unknown Album'
+        duration=top_result.get('duration'),
+        thumbnails=top_result.get('thumbnails', []),
+        original_query=query
+    )
+
+
+def download_audio(video_id: str, output_dir: str = 'downloads') -> str:
     """Download audio from YouTube video"""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -65,7 +86,8 @@ def download_audio(video_id, output_dir='downloads'):
     
     return f'{output_dir}/{video_id}.mp3'
 
-def check_lyrics_availability(video_id):
+
+def check_lyrics_availability(video_id: str) -> Dict[str, Any]:
     """
     Check if timestamped lyrics are available for a song without downloading anything
     
@@ -132,7 +154,7 @@ def check_lyrics_availability(video_id):
     return result
 
 
-def get_lyrics_with_timestamps(video_id, expected_title=None):
+def get_lyrics_with_timestamps(video_id: str, expected_title: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Get lyrics with timestamps using ytmusicapi"""
     ytmusic = YTMusic()
     

@@ -12,17 +12,22 @@ from PIL import Image
 # Add parent directory to path to import from main project
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import from main app
-from main import create_lyric_video
+# Import necessary components
+from typing import Dict, Any, Optional
+from config import Config # Import Config for type hinting
+from ai_generator.main import create_ai_directed_assets
+from video_assembler import assemble_from_ai_assets
 from web.models import db, Task, Video, TaskStatus
 from utils import logger
 from file_manager import SongDirectory
+from lib.song_utils import search_song # Import search_song directly
 
 # Import MoviePy for thumbnail generation
 try:
     from moviepy.editor import VideoFileClip
 except ImportError:
     logger.warning("MoviePy not available. Thumbnail generation will be disabled.")
+    VideoFileClip = None # Define as None if import fails
 
 # Global task queue
 task_queue = queue.Queue()
@@ -44,15 +49,25 @@ def process_video_task(task_id, config):
     Returns:
         Dictionary with result information
     """
+def process_video_task(task_id: int, config: Config):
+    """
+    Process a lyric video generation task by generating assets and assembling the video.
+
+    Args:
+        task_id (int): ID of the task to process.
+        config (Config): Application configuration object.
+
+    Returns:
+        Dict[str, Any]: Dictionary with result information (success or error).
+    """
     global current_task_id
     current_task_id = task_id
-    
-    # Import here to avoid circular imports
+
+    # Import create_app here to avoid potential circular imports at module level
     from web import create_app
-    from lib.song_utils import search_song
-    
+
     # Create app context for database operations
-    app = create_app()
+    app = create_app(config) # Pass config to create_app if it accepts it
     with app.app_context():
         # Get task from database
         task = Task.query.get(task_id)
@@ -63,123 +78,122 @@ def process_video_task(task_id, config):
         # Update task status to processing
         task.status = TaskStatus.PROCESSING
         db.session.commit()
-        
+
+        song_dir: Optional[str] = None # Initialize song_dir
+
         try:
-            # Get song metadata first to create the proper directory
+            # --- 1. Setup: Get Song Info & Directory ---
             output_base_dir = getattr(config, 'OUTPUT_DIR', 'output')
-            
-            # Search for song to get accurate metadata
-            logger.info(f"Searching for song: '{task.song_query}'...")
+            logger.info(f"Searching for song metadata: '{task.song_query}'...")
             song_info = search_song(task.song_query)
-            
+
             if not song_info:
-                task.status = TaskStatus.FAILED
-                task.error_message = "Song not found. Cannot create lyric video."
-                db.session.commit()
-                current_task_id = None
-                return {"error": "Song not found"}
-            
-            # Generate the lyric video - let the main process handle directory creation
-            logger.info(f"Starting lyric video generation for '{task.song_query}'")
+                raise ValueError("Song not found.") # Raise specific error
+
+            logger.info(f"Found song: '{song_info['title']}' by {', '.join(song_info['artists'])}")
+            dir_mgr = SongDirectory(base_dir=output_base_dir)
+            song_dir = dir_mgr.finalize_directory(song_info)
+            logger.info(f"Using song directory: {song_dir}")
+
+            # --- 2. Generate AI Assets ---
+            logger.info(f"Starting AI asset generation for '{task.song_query}' in {song_dir}")
             gemini_api_key = getattr(config, 'GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY'))
-            result = create_lyric_video(
+            assets = create_ai_directed_assets(
                 song_query=task.song_query,
-                api_key=gemini_api_key, 
-                output_dir=output_base_dir
+                output_dir=song_dir,
+                api_key=gemini_api_key
             )
-            
-            if not result:
-                task.status = TaskStatus.FAILED
-                task.error_message = "Failed to generate video. Song may not have timestamped lyrics."
-                db.session.commit()
-                current_task_id = None
-                return {"error": "Failed to generate video"}
-            
-            # Extract metadata from the result
-            timeline = result.get("timeline")
-            video_path = result.get("video_path")
-            
-            if not timeline or not video_path or not os.path.exists(video_path):
-                task.status = TaskStatus.FAILED
-                task.error_message = "Video generation completed but video file is missing"
-                db.session.commit()
-                current_task_id = None
-                return {"error": "Video file missing"}
-            
-            # Determine the paths for web serving
+
+            if assets is None:
+                # create_ai_directed_assets logs specific errors (e.g., lyrics)
+                raise ValueError("Failed to generate AI assets. Check logs.")
+
+            logger.info("AI assets generated successfully.")
+
+            # --- 3. Assemble Video ---
+            logger.info("Assembling final video...")
+            safe_title = song_info['title'].replace(' ', '_').replace('/', '_')
+            video_output_path = os.path.join(song_dir, f"{safe_title}_lyric_video.mp4")
+            final_video_path = assemble_from_ai_assets(assets, video_output_path)
+
+            if not final_video_path or not os.path.exists(final_video_path):
+                raise ValueError("Video assembly failed or file not found.")
+
+            logger.info(f"Video assembly successful: {final_video_path}")
+
+            # --- 4. Post-processing & DB Update ---
+            # Extract metadata needed for DB
+            timeline = assets.get("timeline")
+            if not timeline:
+                 raise ValueError("Timeline object missing from assets after generation.")
+
+            # Determine relative paths for web serving
             base_dir = getattr(config, 'BASE_DIR', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            
-            # Make the video path relative to the static directory for web serving
-            rel_video_path = os.path.relpath(video_path, base_dir)
-            
-            # Generate a thumbnail
-            thumbnail_path = None
-            duration = None
+            rel_video_path = os.path.relpath(final_video_path, base_dir)
+
+            # Generate thumbnail
+            thumbnail_path: Optional[str] = None
+            duration: Optional[float] = None
             try:
-                if 'VideoFileClip' in globals():
-                    # Create thumbnail file in the same directory as the video
-                    video_dir = os.path.dirname(video_path)
-                    thumb_filename = os.path.join(video_dir, "thumbnail.jpg")
-                    
+                if VideoFileClip:
+                    # Create thumbnail file in the same directory as the video (song_dir)
+                    thumb_filename = os.path.join(song_dir, "thumbnail.jpg")
+
                     # Create the thumbnail using MoviePy
-                    with VideoFileClip(video_path) as video:
+                    with VideoFileClip(final_video_path) as video:
                         # Get frame from 25% into the video
-                        frame_time = video.duration * 0.25
-                        frame = video.get_frame(frame_time)
+                        frame_time: float = video.duration * 0.25
+                        frame = video.get_frame(frame_time) # type: ignore
                         
                         # Save as JPEG
                         img = Image.fromarray(frame)
                         img.save(thumb_filename, quality=85)
                         
                         # Get relative path
-                        base_dir = getattr(config, 'BASE_DIR', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                        # base_dir already defined above
                         thumbnail_path = os.path.relpath(thumb_filename, base_dir)
-                        
+
                         # Also store video duration
                         duration = video.duration
+                else:
+                    logger.warning("MoviePy not installed, cannot generate thumbnail.")
             except Exception as e:
                 logger.error(f"Error generating thumbnail: {e}")
-            
-            # Get the title and artist from the timeline
+
+            # Get metadata from timeline for DB
             title = timeline.song_info.get('title', 'Unknown Title')
             artists = timeline.song_info.get('artists', ['Unknown Artist'])
             artist_str = ', '.join(artists) if isinstance(artists, list) else str(artists)
-            
-            # Extract the creative process information
+
+            # Extract creative process info
             creative_process_data = {}
-            
-            # Get the video concept from the timeline
             if hasattr(timeline, 'video_concept') and timeline.video_concept:
                 creative_process_data['video_concept'] = timeline.video_concept
-            
-            # Extract image descriptions from segments
             image_descriptions = []
             for segment in timeline.segments:
+                # Ensure image_path is relative for JSON storage if needed, or store absolute
+                # For now, assume absolute path from generation is fine for JSON
                 if segment.image_description:
                     image_descriptions.append({
                         'text': segment.text,
                         'description': segment.image_description,
-                        'image_path': segment.image_path
+                        'image_path': segment.image_path # Store the path generated
                     })
-            
             creative_process_data['image_descriptions'] = image_descriptions
-            
-            # Get timeline path (for the video_info.json file)
-            timeline_dir = os.path.dirname(video_path)
-            timeline_rel_path = None
-            timeline_file_path = os.path.join(timeline_dir, "timeline_final.json")
-            
-            if os.path.exists(timeline_file_path):
-                timeline_rel_path = os.path.relpath(timeline_file_path, base_dir)
-            
-            # Get images directory path
-            images_dir = result.get("images_dir")
-            images_rel_dir = None
+
+            # Get relative paths for timeline and images dir for DB storage
+            timeline_rel_path: Optional[str] = None
+            timeline_final_path = os.path.join(song_dir, "timeline_final.json")
+            if os.path.exists(timeline_final_path):
+                timeline_rel_path = os.path.relpath(timeline_final_path, base_dir)
+
+            images_rel_dir: Optional[str] = None
+            images_dir = assets.get("images_dir") # Get from assets dict
             if images_dir and os.path.exists(images_dir):
                 images_rel_dir = os.path.relpath(images_dir, base_dir)
-            
-            # Create video record
-            video = Video(
+
+            # Create Video record
+            video_record = Video(
                 task_id=task.id,
                 title=title,
                 artist=artist_str,
@@ -191,35 +205,37 @@ def process_video_task(task_id, config):
                 timeline_path=timeline_rel_path
             )
             
-            # Update task
+            # Update task status
             task.status = TaskStatus.COMPLETED
-            
-            # Save to database
-            db.session.add(video)
+            task.error_message = None # Clear previous errors
+
+            # Save Video record to database
+            db.session.add(video_record)
             db.session.commit()
-            
+
+            logger.info(f"Task {task_id} completed successfully. Video ID: {video_record.id}")
             current_task_id = None
             return {
                 "success": True,
                 "task_id": task.id,
-                "video_id": video.id,
+                "video_id": video_record.id,
                 "video_path": rel_video_path
             }
-            
-        except Exception as e:
-            # Log the full error
-            logger.error(f"Error processing task {task_id}: {e}")
-            traceback.print_exc()
-            
-            # Update task status
-            task.status = TaskStatus.FAILED
-            task.error_message = str(e)
-            db.session.commit()
-            
-            current_task_id = None
-            return {"error": str(e)}
 
-def worker_loop(config):
+        except Exception as e:
+            logger.error(f"Error processing task {task_id}: {e}", exc_info=True)
+            # traceback.print_exc() # logger automatically handles traceback with exc_info=True
+
+            # Update task status in DB
+            task.status = TaskStatus.FAILED
+            task.error_message = f"{type(e).__name__}: {str(e)}"
+            db.session.commit()
+
+            current_task_id = None
+            return {"error": str(e), "type": type(e).__name__}
+
+
+def worker_loop(config: Config):
     """Worker thread function that processes tasks from the queue"""
     global worker_running
     

@@ -1,270 +1,196 @@
 #!/usr/bin/env python3
 """
-AI-Generated Lyric Video Creator
+AI-Generated Lyric Video Creator - Command Line Interface
 
 This tool creates lyric videos with AI-generated images based on song lyrics.
-It uses ytmusicapi to find songs and retrieve lyrics, yt-dlp to download audio,
-and moviepy to assemble the final video.
+It orchestrates the process of finding the song, generating AI assets
+(concept, descriptions, images), and assembling the final video.
 
 Usage:
-    python main.py "Song name Artist" [--api-key API_KEY] [--output OUTPUT_DIR]
+    python main.py "Song name Artist" [--api-key API_KEY] [--output OUTPUT_DIR] [--verbose]
 """
 import os
 import argparse
+import logging
 from typing import Dict, Any, Optional
 
 from config import Config, config
-from utils import logger, measure_execution_time, ProgressTracker, LyricsError
+from utils import logger, measure_execution_time, ProgressTracker
 from file_manager import SongDirectory
 from video_assembler import assemble_from_ai_assets
+from ai_generator.main import create_ai_directed_assets
+from lib.song_utils import search_song # Needed for directory finalization
 
 
 @measure_execution_time
-def create_lyric_video(
+def run_full_pipeline(
     song_query: str,
     api_key: Optional[str] = None,
-    output_dir: str = None,
-    skip_to_step: Optional[str] = None
-) -> Dict[str, Any]:
+    output_base_dir: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """
-    Create a complete AI-generated lyric video
-    
+    Runs the full pipeline: setup, asset generation, and video assembly.
+
     Args:
-        song_query: Song name and artist to search for
-        api_key: API key for AI service (optional)
-        output_dir: Output directory for all generated files
-        skip_to_step: Skip to a specific step in the process (optional)
-        
+        song_query (str): Song name and artist to search for.
+        api_key (Optional[str]): API key for AI service (overrides config/env).
+        output_base_dir (Optional[str]): Base directory for output. If None, uses
+                                         config default.
+
     Returns:
-        Dictionary with paths to generated files
+        Optional[Dict[str, Any]]: Dictionary containing paths to generated assets
+                                  and the final video if successful, otherwise None.
+                                  Keys include 'song_dir', 'assets', 'video_path'.
     """
-    # Initialize configuration
-    if api_key or output_dir:
-        cfg_dict = {}
-        if api_key:
-            cfg_dict['GEMINI_API_KEY'] = api_key
-            logger.info("Using provided API key")
-        if output_dir:
-            cfg_dict['OUTPUT_DIR'] = output_dir
-        
-        # Create customized config
-        custom_config = Config.from_dict(cfg_dict)
-    else:
-        custom_config = config
-        
-    # Create base output directory
-    output_dir = custom_config.OUTPUT_DIR
-    os.makedirs(output_dir, exist_ok=True)
-    
-    progress = ProgressTracker(total_steps=7, description="Creating lyric video")
-    progress.update(0, "Starting lyric video creation process")
-    
-    # For skip_to_step mode, find existing directory
-    if skip_to_step:
-        song_dir = SongDirectory.find_song_directory_by_query(song_query, output_dir)
-        
-        if not song_dir:
-            # Try to find any directory with a final timeline
-            possible_dirs = []
-            for root, dirs, files in os.walk(output_dir):
-                for file in files:
-                    if file == "timeline_final.json":
-                        possible_dirs.append(root)
-                        
-            if possible_dirs:
-                if len(possible_dirs) == 1:
-                    song_dir = possible_dirs[0]
-                    logger.info(f"Found existing song directory: {song_dir}")
-                else:
-                    # Multiple matches - ask user to select
-                    print("Multiple existing song directories found:")
-                    for i, path in enumerate(possible_dirs):
-                        print(f"{i+1}. {path}")
-                    selection = input(f"Please select directory (1-{len(possible_dirs)}): ")
-                    try:
-                        idx = int(selection) - 1
-                        song_dir = possible_dirs[idx]
-                        logger.info(f"User selected directory: {song_dir}")
-                    except:
-                        logger.warning("Invalid selection. Using the first directory.")
-                        song_dir = possible_dirs[0]
-                        
-                # Create SongDirectory instance from existing path
-                parts = os.path.normpath(song_dir).split(os.sep)
-                if len(parts) >= 2:
-                    song_title = parts[-1].replace('_', ' ')
-                    artist_name = parts[-2].replace('_', ' ')
-                    dir_mgr = SongDirectory(artist=artist_name, title=song_title, base_dir=output_dir)
-                else:
-                    dir_mgr = SongDirectory(base_dir=output_dir)
-                    dir_mgr._song_dir = song_dir
-            else:
-                raise FileNotFoundError(f"Cannot find any existing assets in {output_dir}. Run without skip_to_step first.")
+    # --- 1. Configuration Setup ---
+    logger.info("Step 1: Initializing configuration...")
+    cfg_dict = {}
+    if api_key:
+        cfg_dict['GEMINI_API_KEY'] = api_key
+        logger.info("Using provided API key.")
+    if output_base_dir:
+        cfg_dict['OUTPUT_DIR'] = output_base_dir
+        logger.info(f"Using provided output base directory: {output_base_dir}")
+
+    # Create customized config if overrides were provided
+    current_config = Config.from_dict(cfg_dict) if cfg_dict else config
+    final_output_base = current_config.OUTPUT_DIR
+    os.makedirs(final_output_base, exist_ok=True)
+    logger.info(f"Ensured output base directory exists: {final_output_base}")
+
+    # --- 2. Directory Management ---
+    logger.info("Step 2: Setting up song directory...")
+    # Search for song first to get accurate metadata for directory naming
+    logger.info(f"Searching for song metadata: '{song_query}'...")
+    song_info = search_song(song_query)
+    if not song_info:
+        logger.error(f"Song not found for query: '{song_query}'. Cannot proceed.")
+        print(f"❌ Error: Song '{song_query}' not found.")
+        return None
+    logger.info(f"Found song: '{song_info.title}' by {', '.join(song_info.artists)}") # Use attribute access
+
+    # Use SongDirectory to create/get the specific path for this song
+    dir_mgr = SongDirectory(base_dir=final_output_base)
+    # finalize_directory uses the song_info to create the artist/title structure
+    song_dir = dir_mgr.finalize_directory(song_info)
+    logger.info(f"Using song directory: {song_dir}")
+
+    # --- 3. AI Asset Generation ---
+    logger.info("Step 3: Generating AI assets (timeline, concept, descriptions, images)...")
+    try:
+        # Pass the finalized song_dir to the asset generator
+        assets = create_ai_directed_assets(
+            song_query=song_query, # Pass original query for consistency if needed
+            output_dir=song_dir,
+            api_key=current_config.GEMINI_API_KEY # Pass the potentially overridden key
+        )
+    except FileNotFoundError as e:
+         logger.error(f"Asset generation failed: Output directory issue. {e}")
+         print(f"❌ Error: {e}")
+         return None
+    except Exception as e:
+        logger.error(f"Asset generation failed: {e}", exc_info=True)
+        print(f"❌ Error during AI asset generation: {e}")
+        return None
+
+    if assets is None:
+        logger.error("Failed to generate AI assets. Check previous logs for details (e.g., lyrics availability).")
+        print("❌ Error: Failed to generate AI assets. Cannot assemble video.")
+        # Specific messages about lyrics are printed within create_ai_directed_assets
+        return None
+
+    logger.info("AI assets generated successfully.")
+    logger.debug(f"Assets dictionary: {assets.keys()}") # Log keys for debugging
+
+    # --- 4. Video Assembly ---
+    logger.info("Step 4: Assembling final video...")
+    try:
+        # Determine the output video path within the song_dir
+        safe_title = song_info.title.replace(' ', '_').replace('/', '_') # Use attribute access
+        video_output_path = os.path.join(song_dir, f"{safe_title}_lyric_video.mp4")
+
+        final_video_path = assemble_from_ai_assets(assets, video_output_path)
+
+        if final_video_path and os.path.exists(final_video_path):
+            logger.info(f"Video assembly successful: {final_video_path}")
+            print(f"✅ Video created successfully: {final_video_path}")
+            return {
+                "song_dir": song_dir,
+                "assets": assets,
+                "video_path": final_video_path
+            }
         else:
-            # Create SongDirectory instance from existing path
-            parts = os.path.normpath(song_dir).split(os.sep)
-            if len(parts) >= 2:
-                song_title = parts[-1].replace('_', ' ')
-                artist_name = parts[-2].replace('_', ' ')
-                dir_mgr = SongDirectory(artist=artist_name, title=song_title, base_dir=output_dir)
-            else:
-                dir_mgr = SongDirectory(base_dir=output_dir)
-                dir_mgr._song_dir = song_dir
-                
-        # Load existing assets
-        progress.update(1, "Loading existing assets")
-        
-        from lyrics_segmenter import LyricsTimeline
-        
-        # Find timeline
-        timeline_path = os.path.join(song_dir, "timeline_final.json")
-        if not os.path.exists(timeline_path):
-            raise FileNotFoundError(f"Cannot find timeline_final.json in {song_dir}")
-        
-        # Find audio file
-        audio_path = None
-        for file in os.listdir(song_dir):
-            if file.endswith(".mp3") or file.endswith(".wav"):
-                audio_path = os.path.join(song_dir, file)
-                break
-        
-        if audio_path is None:
-            raise FileNotFoundError(f"Cannot find audio file in {song_dir}")
-        
-        # Load timeline and prepare assets
-        timeline = LyricsTimeline.load_from_file(timeline_path)
-        images_dir = os.path.join(song_dir, "images")
-        
-        assets = {
-            "timeline": timeline,
-            "audio_path": audio_path,
-            "images_dir": images_dir
-        }
-        
-        # Determine which step to skip to
-        if skip_to_step == "assemble":
-            goto_step2 = True
-            progress.update(5, "Skipping to video assembly")
-        else:
-            goto_step2 = False
-            progress.update(5, "Skipping to image generation")
-    else:
-        # Create a new video from scratch
-        # Step 1: Search for song and verify lyrics
-        progress.update(1, "Searching for song")
-        
-        # Initialize temporary directory based on query
-        dir_mgr = SongDirectory(temp_query=song_query, base_dir=output_dir)
-        
-        # Import here to avoid circular imports
-        from ai_generator.main import create_ai_directed_video
-        from lib.song_utils import search_song, check_lyrics_availability
-        
-        logger.info(f"Searching for: {song_query}...")
-        song_info = search_song(song_query)
-        
-        if not song_info:
-            logger.error("Song not found")
-            print("Song not found. Cannot create lyric video.")
+            logger.error("Video assembly failed. assemble_from_ai_assets returned None or file doesn't exist.")
+            print("❌ Error: Failed to assemble the final video.")
             return None
-            
-        # Check if song has timestamped lyrics before creating directories
-        progress.update(2, "Checking lyrics availability")
-        
-        video_id = song_info['videoId']
-        logger.info(f"Checking lyrics for: {song_info['title']} by {', '.join(song_info['artists'])}")
-        lyrics_status = check_lyrics_availability(video_id)
-        
-        # If no timestamped lyrics, abort early to avoid empty directories
-        if not lyrics_status['has_timestamps']:
-            logger.error(f"No timestamped lyrics available: {lyrics_status['message']}")
-            print("\n" + "="*80)
-            print("❌ LYRICS CHECK FAILED: CANNOT CREATE LYRIC VIDEO")
-            print("="*80)
-            print(f"🎵 Song: {song_info['title']} by {', '.join(song_info['artists'])}")
-            print(f"ℹ️ Status: {lyrics_status['message']}")
-            print(f"⚠️ This application requires songs with timestamped lyrics.")
-            print("="*80)
-            print("\nTry a different song or a more popular version that might have timestamped lyrics.")
-            return None
-            
-        # Great! We have timestamped lyrics.
-        logger.info(f"Timestamped lyrics available: {lyrics_status['message']}")
-        print("\n" + "="*80)
-        print("✅ LYRICS CHECK PASSED: TIMESTAMPED LYRICS AVAILABLE")
-        print("="*80)
-        print(f"🎵 Song: {song_info['title']} by {', '.join(song_info['artists'])}")
-        print(f"ℹ️ Status: {lyrics_status['message']}")
-        print("="*80 + "\n")
-        
-        # Create the song directory with accurate information
-        progress.update(3, "Creating song directory")
-        song_dir = dir_mgr.finalize_directory(song_info)
-        logger.info(f"Creating directory: {song_dir}")
-        
-        # Generate AI assets
-        progress.update(4, "Generating AI-directed video assets")
-        assets = create_ai_directed_video(song_query, custom_config.GEMINI_API_KEY, song_dir)
-        
-        if assets is None:
-            logger.error("Failed to generate AI-directed video assets")
-            print("Failed to generate AI-directed video assets - cannot proceed.")
-            print("Try again with a different song or more specific query.")
-            return None
-            
-        goto_step2 = True
-    
-    # Step 2: Assemble the final video if requested
-    if goto_step2:
-        progress.update(6, "Assembling final video")
-        logger.info("Assembling final video")
-        print(f"=== STEP 2: ASSEMBLING FINAL VIDEO ===")
-        
-        # Create output video filename based on song title
-        safe_title = assets["timeline"].song_info['title'].replace(' ', '_').replace('/', '_')
-        video_path = os.path.join(song_dir, f"{safe_title}_lyric_video.mp4")
-        final_path = assemble_from_ai_assets(assets, video_path)
-        
-        if final_path:
-            assets["video_path"] = final_path
-            progress.update(7, "Video creation complete")
-            logger.info(f"Video created: {final_path}")
-        else:
-            progress.update(7, "Video assembly failed")
-            logger.error("Failed to assemble video")
-    
-    # Final output
-    print(f"=== LYRIC VIDEO CREATION COMPLETE ===")
-    print(f"Output directory: {song_dir}")
-    
-    if "video_path" in assets and assets["video_path"]:
-        print(f"Final video: {assets['video_path']}")
-    
-    return assets
+    except Exception as e:
+        logger.error(f"Video assembly failed with an exception: {e}", exc_info=True)
+        print(f"❌ Error during video assembly: {e}")
+        return None
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Create an AI-generated lyric video')
-    parser.add_argument('song_query', help='Song name and artist to search for')
-    parser.add_argument('--api-key', help='API key for AI service (overrides environment variable)')
-    parser.add_argument('--output', help='Output directory', default=None)
-    parser.add_argument('--skip-to', choices=['generate', 'assemble'],
-                      help='Skip to a specific step (useful for testing)')
-    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
-    
+    parser = argparse.ArgumentParser(
+        description='Create an AI-generated lyric video.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter # Show defaults in help
+    )
+    parser.add_argument('song_query',
+                        help='Song name and artist to search for (e.g., "Bohemian Rhapsody Queen")')
+    parser.add_argument('--api-key',
+                        help='Gemini API key (overrides GEMINI_API_KEY environment variable and config file)')
+    parser.add_argument('--output',
+                        dest='output_base_dir',
+                        help='Base directory for output files (artist/title subdirs will be created)',
+                        default=None) # Default is handled by config
+    # Removed --skip-to as resume logic is handled internally now
+    parser.add_argument('--verbose', '-v',
+                        action='store_true',
+                        help='Enable verbose DEBUG logging')
+
     args = parser.parse_args()
-    
-    # Set up logging level based on verbose flag
+
+    # --- Logging Setup ---
     if args.verbose:
-        import logging
+        print("Verbose logging enabled.")
         logger.setLevel(logging.DEBUG)
-        logger.debug("Verbose logging enabled")
-    
+        # Optionally configure handlers for more detailed output if needed
+        # Example: Add a StreamHandler for DEBUG level to console
+        # console_handler = logging.StreamHandler()
+        # console_handler.setLevel(logging.DEBUG)
+        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        # console_handler.setFormatter(formatter)
+        # logger.addHandler(console_handler) # Be careful not to add duplicate handlers
+        logger.debug("DEBUG logging is active.")
+    else:
+        logger.setLevel(logging.INFO)
+
+    # --- Run Pipeline ---
+    print(f"Starting lyric video generation for: '{args.song_query}'...")
     try:
-        create_lyric_video(args.song_query, args.api_key, args.output, args.skip_to)
+        result = run_full_pipeline(
+            song_query=args.song_query,
+            api_key=args.api_key,
+            output_base_dir=args.output_base_dir
+        )
+
+        if result:
+            print("\n" + "="*30 + " PROCESS COMPLETE " + "="*30)
+            print(f"Song Directory: {result.get('song_dir')}")
+            print(f"Final Video:    {result.get('video_path')}")
+            print("="*80)
+        else:
+            print("\n" + "="*30 + " PROCESS FAILED " + "="*30)
+            print("Video generation failed. Please check the logs above for errors.")
+            print("Common issues include song not found, missing timestamped lyrics, or API errors.")
+            print("="*80)
+            exit(1) # Exit with error code
+
     except KeyboardInterrupt:
         print("\nProcess interrupted by user. Exiting...")
+        logger.warning("Process interrupted by user.")
+        exit(130) # Standard exit code for Ctrl+C
     except Exception as e:
-        logger.exception("An error occurred")
-        print(f"Error: {str(e)}")
-        print("Check the log for details.")
+        logger.exception("An unexpected error occurred in the main script.")
+        print(f"\n❌ An unexpected error occurred: {str(e)}")
+        print("Check the log file for detailed traceback.")
+        exit(1)

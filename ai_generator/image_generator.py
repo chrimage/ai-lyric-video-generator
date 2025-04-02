@@ -1,24 +1,25 @@
 """
-AI Image Generator - Creates images for lyric video using AI APIs
+AI Image Generator - Creates image files for lyric video segments based on descriptions.
 """
 import os
 import time
 import random
 import json
 import re
-from typing import List, Optional, Dict, Any, Union
+import collections # Added for deque
+from typing import List, Optional, Dict, Any, Union, Deque # Added Deque type
 
 from PIL import Image, ImageDraw, ImageFont
 
 # Import retry config and specific error types
 from ai_generator.config import (
-    GEMINI_API_KEY, AVAILABLE_API, IMAGE_GENERATION_MODEL, IMAGE_DESCRIPTION_MODEL,
+    GEMINI_API_KEY, AVAILABLE_API, IMAGE_GENERATION_MODEL, IMAGE_DESCRIPTION_MODEL, # Keep IMAGE_DESCRIPTION_MODEL for safety revision
     DEFAULT_IMAGE_WIDTH, DEFAULT_IMAGE_HEIGHT, client,
-    MAX_API_RETRIES, INITIAL_BACKOFF_DELAY
+    MAX_API_RETRIES, INITIAL_BACKOFF_DELAY,
+    GEMINI_IMAGE_RPM # Import the rate limit config
 )
 from ai_generator.prompts import (
-    IMAGE_DESCRIPTION_PROMPT, IMAGE_GENERATION_PROMPT,
-    SAFER_DESCRIPTION_PROMPT, ABSTRACT_IMAGE_PROMPT
+    IMAGE_GENERATION_PROMPT, SAFER_DESCRIPTION_PROMPT, ABSTRACT_IMAGE_PROMPT
 )
 from ai_generator.utils import retry_api_call, format_text_display, logger
 from lyrics_segmenter import LyricsTimeline, LyricsSegment
@@ -35,9 +36,9 @@ except ImportError:
     genai = None # Ensure genai is None if import fails
 
 
-class AIImageGenerator:
+class ImageGenerator:
     """
-    Generates images for each segment of the lyrics timeline using AI APIs.
+    Generates image files for each segment of the lyrics timeline based on provided descriptions.
 
     Handles interaction with the configured AI image generation service (Gemini),
     including prompt formatting, API calls with retries, safety handling,
@@ -46,7 +47,7 @@ class AIImageGenerator:
 
     def __init__(self, output_dir: str = "generated_images", api_key: Optional[str] = None) -> None:
         """
-        Initializes the AIImageGenerator.
+        Initializes the ImageGenerator.
 
         Args:
             output_dir (str): Directory to save generated images.
@@ -56,6 +57,7 @@ class AIImageGenerator:
         self.api_key: Optional[str] = api_key or GEMINI_API_KEY
         self.api: str = AVAILABLE_API
         self.client: Optional[genai.Client] = None # Initialize client attribute
+        self._api_call_timestamps: Deque[float] = collections.deque() # For rate limiting
 
         # Initialize client only if genai and types are available
         if genai and types:
@@ -76,7 +78,7 @@ class AIImageGenerator:
             self.api = "mock"
 
         if not self.client:
-            logger.warning("Gemini client not available. Generator will use mock generation.")
+            logger.warning("Gemini client not available. ImageGenerator will use mock generation.")
             self.api = "mock"
 
         os.makedirs(self.output_dir, exist_ok=True)
@@ -158,8 +160,8 @@ class AIImageGenerator:
                 return response
             else:
                 logger.warning(f"Received empty or invalid response structure from Gemini model {model}.")
-                # Consider if this should raise an error or return None based on retry logic needs
-                return None # Or raise specific error?
+            # Consider if this should raise an error or return None based on retry logic needs
+            return None # Or raise specific error?
 
         try:
             # Use the existing retry utility for general API call retries
@@ -172,229 +174,30 @@ class AIImageGenerator:
             logger.error(f"Gemini API call failed after retries for model {model}: {e}", exc_info=True)
             return None # Indicate failure after retries
 
-    def generate_image_descriptions(self, timeline: LyricsTimeline) -> LyricsTimeline:
-        """
-        Generates image descriptions for each segment using the structured video concept.
+    # Removed generate_image_descriptions, _generate_descriptions_with_gemini,
+    # _generate_mock_descriptions, and _parse_numbered_response methods.
 
-        Args:
-            timeline (LyricsTimeline): The timeline object containing lyrics segments and video concept.
+    def _apply_rate_limit(self) -> None:
+        """Checks and enforces the API rate limit."""
+        now = time.monotonic()
+        # Remove timestamps older than 60 seconds
+        while self._api_call_timestamps and self._api_call_timestamps[0] < now - 60:
+            self._api_call_timestamps.popleft()
 
-        Returns:
-            LyricsTimeline: The updated timeline with image descriptions added to segments.
+        if len(self._api_call_timestamps) >= GEMINI_IMAGE_RPM:
+            time_since_oldest_allowed = now - self._api_call_timestamps[0]
+            wait_time = 60.0 - time_since_oldest_allowed + 0.1 # Add small buffer
+            logger.warning(f"Rate limit ({GEMINI_IMAGE_RPM} RPM) reached. Waiting for {wait_time:.2f} seconds.")
+            time.sleep(wait_time)
+            # Re-clean timestamps after waiting
+            now = time.monotonic()
+            while self._api_call_timestamps and self._api_call_timestamps[0] < now - 60:
+                 self._api_call_timestamps.popleft()
 
-        Raises:
-            ValueError: If the timeline does not contain a valid structured video concept.
-        """
-        if not timeline.video_concept or not isinstance(timeline.video_concept, dict):
-            logger.error("Timeline must have a valid structured video concept (dict) before generating descriptions.")
-            raise ValueError("Missing or invalid video concept in timeline.")
-
-        concept: Dict[str, Any] = timeline.video_concept
-        song_title: str = timeline.song_info.get('title', 'Unknown Title')
-        artists: str = ', '.join(timeline.song_info.get('artists', ['Unknown Artist']))
-
-        visual_style: str = concept.get('visual_style', 'cinematic')
-        color_palette_info: Any = concept.get('color_palette', (['#FFFFFF', '#000000'], 'High contrast black and white'))
-        color_palette_colors: str = ', '.join(color_palette_info[0]) if isinstance(color_palette_info, tuple) else str(color_palette_info)
-        color_palette_desc: str = color_palette_info[1] if isinstance(color_palette_info, tuple) else 'Default palette'
-        key_themes: str = ', '.join(concept.get('key_themes_or_motifs', ['lyrics', 'music']))
-        overall_concept_text: str = concept.get('overall_concept', 'A standard lyric video.')
-
-        segments_text: List[str] = [f"{i+1}. [{seg.segment_type}] {seg.text}" for i, seg in enumerate(timeline.segments)]
-        segments_formatted: str = "\n".join(segments_text)
-
-        prompt: str = IMAGE_DESCRIPTION_PROMPT.format(
-            song_title=song_title,
-            artists=artists,
-            visual_style=visual_style,
-            color_palette_desc=color_palette_desc,
-            color_palette_colors=color_palette_colors,
-            key_themes_or_motifs=key_themes,
-            overall_concept=overall_concept_text,
-            segments_text=segments_formatted
-        )
-
-        logger.info("Generating image descriptions...")
-        descriptions: List[str] = []
-        if self.api == "gemini" and self.client and types:
-            # Format the prompt correctly for the API call
-            formatted_contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
-            descriptions = self._generate_descriptions_with_gemini(formatted_contents)
-        else:
-            logger.info("Using mock image description generation.")
-            descriptions = self._generate_mock_descriptions(timeline.segments, concept)
-
-        num_segments: int = len(timeline.segments)
-        if len(descriptions) != num_segments:
-            logger.warning(f"Generated {len(descriptions)} descriptions, but expected {num_segments}. Using defaults for missing ones.")
-            # Generate fallback descriptions for missing ones
-            fallback_descriptions = [
-                f"Visual representation of '{timeline.segments[i].text}' in a {visual_style} style."
-                for i in range(len(descriptions), num_segments)
-            ]
-            descriptions.extend(fallback_descriptions)
-            # Ensure the list length matches exactly
-            descriptions = descriptions[:num_segments]
-
-        # Assign descriptions, ensuring no segment is left without one
-        for i, segment in enumerate(timeline.segments):
-            if i < len(descriptions) and descriptions[i]:
-                segment.image_description = descriptions[i]
-            elif not segment.image_description: # Assign fallback only if it's still missing
-                logger.warning(f"Segment {i+1} still has no description after generation/fallback. Using default.")
-                segment.image_description = f"Visual representation of '{segment.text}' in a {visual_style} style."
-
-        return timeline
-
-    def _generate_descriptions_with_gemini(self, contents: List[types.Content]) -> List[str]:
-        """
-        Generates image descriptions using the Gemini API and parses the response.
-
-        Args:
-            contents (List[types.Content]): The formatted prompt content for the API.
-
-        Returns:
-            List[str]: A list of parsed image descriptions.
-        """
-        if not google_exceptions: # Check if google_exceptions is available
-             logger.error("google.api_core.exceptions not available.")
-             return []
-
-        logger.info(f"Requesting image descriptions from model: {IMAGE_DESCRIPTION_MODEL}")
-        try:
-            # Pass the pre-formatted contents to the API helper
-            response = self._call_gemini_api(contents, IMAGE_DESCRIPTION_MODEL, temperature=0.6)
-
-            if response and response.candidates and response.candidates[0].content.parts:
-                # Assuming the first part contains the text response
-                raw_text = response.candidates[0].content.parts[0].text
-                if raw_text:
-                    parsed_descriptions = self._parse_numbered_response(raw_text)
-                    logger.info(f"Successfully generated and parsed {len(parsed_descriptions)} descriptions.")
-                    return parsed_descriptions
-                else:
-                    logger.error("Received response, but text part was empty.")
-                    return []
-            else:
-                logger.error("Failed to get valid response structure for image descriptions.")
-                return []
-        except google_exceptions.PermissionDenied as e:
-            logger.error(f"Image description generation blocked by safety filters: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"Error during Gemini description generation: {e}", exc_info=True)
-            return []
-
-    def _generate_mock_descriptions(self, segments: List[LyricsSegment], concept: Dict[str, Any]) -> List[str]:
-        """
-        Generates mock image descriptions based on the video concept.
-
-        Args:
-            segments (List[LyricsSegment]): The list of lyric segments.
-            concept (Dict[str, Any]): The structured video concept.
-
-        Returns:
-            List[str]: A list of mock descriptions.
-        """
-        logger.info("Generating mock image descriptions.")
-        descriptions: List[str] = []
-        style: str = concept.get('visual_style', 'mock style')
-        themes: List[str] = concept.get('key_themes_or_motifs', ['mock theme'])
-        # Safely access palette description
-        palette_info: Any = concept.get('color_palette', ([], 'mock palette'))
-        palette_desc: str = palette_info[1] if isinstance(palette_info, tuple) and len(palette_info) > 1 else 'mock palette'
-
-        for i, segment in enumerate(segments):
-            theme_element: str = themes[i % len(themes)] if themes else 'default theme'
-            desc: str
-            if segment.segment_type == "lyrics":
-                desc = (f"Mock image in a '{style}' style. Features '{segment.text}' integrated creatively. "
-                        f"Uses {palette_desc} colors and incorporates the theme '{theme_element}'.")
-            else: # Instrumental or other types
-                desc = (f"Mock instrumental visual in a '{style}' style. "
-                        f"Atmospheric scene with {palette_desc} colors, focusing on the theme '{theme_element}'.")
-            descriptions.append(desc)
-        return descriptions
-
-    def _parse_numbered_response(self, response_text: str) -> List[str]:
-        """
-        Parses a numbered list response from the AI, handling potential inconsistencies.
-
-        Args:
-            response_text (str): The raw text response from the AI.
-
-        Returns:
-            List[str]: A list of extracted descriptions in order.
-        """
-        if not response_text:
-            logger.warning("Received empty response text for parsing.")
-            return []
-
-        lines: List[str] = response_text.strip().split('\n')
-        descriptions: Dict[int, str] = {}
-        current_description: str = ""
-        current_number: Optional[int] = None
-
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            # Regex to find lines starting with a number, optional dot, and whitespace
-            match = re.match(r'^\s*(\d+)\.?\s*(.*)', line)
-
-            if match:
-                number: int = int(match.group(1))
-                text_part: str = match.group(2).strip()
-
-                # Store the previously accumulated description before starting a new one
-                if current_number is not None and current_description:
-                    if current_number not in descriptions:
-                        descriptions[current_number] = current_description.strip()
-                    else:
-                        # Append if number already exists (unlikely but possible)
-                        descriptions[current_number] += " " + current_description.strip()
-
-                # Start the new description
-                current_number = number
-                current_description = text_part
-
-            elif current_number is not None:
-                # Append line to the current description if it doesn't start with a number
-                current_description += " " + line
-
-        # Store the last description after the loop finishes
-        if current_number is not None and current_description:
-            if current_number not in descriptions:
-                descriptions[current_number] = current_description.strip()
-            else:
-                descriptions[current_number] += " " + current_description.strip()
-
-        # Handle cases where parsing might fail
-        if not descriptions and response_text.strip():
-            # Check if the response looks like a JSON error message
-            if '"error":' in response_text or response_text.startswith('{'):
-                try:
-                    error_data = json.loads(response_text)
-                    logger.warning(f"Response appears to be an error JSON: {error_data}")
-                    return []
-                except json.JSONDecodeError:
-                    # Not valid JSON, treat as single description if non-empty
-                    logger.warning("Could not parse numbered list, and response is not JSON error. Treating as single description (likely incorrect).")
-                    # Returning empty list as single description is usually wrong here
-                    return []
-            else:
-                 logger.warning("Could not parse numbered list from response. Returning empty list.")
-                 return []
-
-
-        # Return descriptions sorted by their number
-        sorted_descriptions: List[str] = [descriptions[k] for k in sorted(descriptions.keys())]
-        return sorted_descriptions
 
     def generate_images(self, timeline: LyricsTimeline) -> LyricsTimeline:
         """
-        Generates images for each segment based on their descriptions.
+        Generates image files for each segment based on their descriptions.
 
         Iterates through the timeline, generates an image for each segment using
         the configured API or mock generation, handles retries, safety blocks,
@@ -437,7 +240,12 @@ class AIImageGenerator:
             try:
                 success = False
                 if self.api == "gemini" and self.client and types and google_exceptions:
+                    # --- Rate Limiting Check ---
+                    self._apply_rate_limit()
+                    # ---------------------------
                     # Call the function that handles API interaction and retries
+                    # Record timestamp *before* the potentially long call
+                    self._api_call_timestamps.append(time.monotonic())
                     success = self._generate_image_with_gemini(segment.image_description, filepath)
                 else:
                     # Fallback to mock if API is not configured or libs missing
@@ -492,10 +300,9 @@ class AIImageGenerator:
                 if mock_success:
                     segment.image_path = filepath
 
-            # Add delay between generations regardless of success/failure to ease load
-            delay: float = random.uniform(1.5, 3.0)
-            logger.debug(f"Waiting {delay:.1f}s before next image generation.")
-            time.sleep(delay)
+            # Removed the fixed delay here, rate limiting handles pauses.
+            # Consider if a small minimum delay is still desired.
+            # time.sleep(random.uniform(0.1, 0.3)) # Optional small jitter
 
         return timeline
 
@@ -543,7 +350,7 @@ class AIImageGenerator:
         image_saved: bool = False
         retries: int = 0
 
-        while retries < MAX_API_RETRIES:
+        while retries <= MAX_API_RETRIES: # Allow MAX_API_RETRIES attempts (0 to MAX_API_RETRIES-1)
             try:
                 # Use generate_content, not generate_content_stream for this model
                 response: types.GenerateContentResponse = self.client.models.generate_content(
@@ -597,20 +404,47 @@ class AIImageGenerator:
             except google_exceptions.ClientError as e:
                 # Check specifically for 429 Too Many Requests
                 status_code = getattr(e, 'status_code', None) # type: ignore
-                is_rate_limit_error = (status_code == 429) or ("429" in str(e) and "Too Many Requests" in str(e))
+                is_rate_limit_error = (status_code == 429) or ("429" in str(e) and ("Too Many Requests" in str(e) or "RESOURCE_EXHAUSTED" in str(e)))
 
-                if is_rate_limit_error and retries < MAX_API_RETRIES - 1:
+                if is_rate_limit_error and retries < MAX_API_RETRIES:
                     retries += 1
-                    current_delay: float = INITIAL_BACKOFF_DELAY * (2 ** (retries - 1))
-                    jitter: float = random.uniform(0.8, 1.2)
-                    sleep_time: float = min(current_delay * jitter, 120.0) # Cap delay
+                    sleep_time: float = INITIAL_BACKOFF_DELAY # Default backoff
 
-                    logger.warning(f"API rate limit hit (429). Retrying attempt {retries+1}/{MAX_API_RETRIES} after {sleep_time:.2f}s...")
+                    # Try to extract retryDelay from the error details
+                    try:
+                        error_details = getattr(e, 'details', []) # type: ignore
+                        for detail in error_details:
+                            if detail.get('@type') == 'type.googleapis.com/google.rpc.RetryInfo':
+                                delay_str = detail.get('retryDelay', '0s')
+                                match = re.match(r'(\d+)(?:\.(\d+))?s', delay_str)
+                                if match:
+                                    seconds = int(match.group(1))
+                                    microseconds = int(match.group(2) or '0') * 10**(6 - len(match.group(2) or ''))
+                                    parsed_delay = seconds + microseconds / 1_000_000
+                                    if parsed_delay > 0:
+                                        sleep_time = parsed_delay
+                                        logger.info(f"Using retryDelay from API error: {sleep_time:.2f}s")
+                                        break # Use the first valid retryDelay found
+                        else: # If loop completes without break (no valid retryDelay found)
+                             # Use exponential backoff if no specific delay provided
+                             current_delay: float = INITIAL_BACKOFF_DELAY * (2 ** (retries - 1))
+                             jitter: float = random.uniform(0.8, 1.2)
+                             sleep_time = min(current_delay * jitter, 120.0) # Cap delay
+                             logger.info(f"Using exponential backoff: {sleep_time:.2f}s")
+                    except Exception as parse_e:
+                        logger.warning(f"Could not parse retryDelay from error details: {parse_e}. Using exponential backoff.")
+                        current_delay: float = INITIAL_BACKOFF_DELAY * (2 ** (retries - 1))
+                        jitter: float = random.uniform(0.8, 1.2)
+                        sleep_time = min(current_delay * jitter, 120.0) # Cap delay
+
+                    logger.warning(f"API rate limit hit (429). Retrying attempt {retries}/{MAX_API_RETRIES} after {sleep_time:.2f}s...")
                     time.sleep(sleep_time)
+                    # Also apply the general rate limiter check before the next attempt
+                    self._apply_rate_limit()
                     continue # Go to the next iteration of the while loop
                 else:
                     # If it's not a 429 or retries are exhausted, re-raise the exception
-                    logger.error(f"Non-429 ClientError or retries exhausted: {e}", exc_info=True)
+                    logger.error(f"Non-429 ClientError or retries exhausted ({retries}/{MAX_API_RETRIES}): {e}", exc_info=True)
                     raise e # Re-raise to be caught by the outer handler in generate_images
 
             except google_exceptions.PermissionDenied as safety_e:
