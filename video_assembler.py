@@ -246,7 +246,7 @@ def assemble_ai_directed_video(timeline_path: str, audio_path: str, output_path:
     # Create default output path if not provided
     if output_path is None:
         output_dir = os.path.dirname(timeline_path)
-        safe_title = timeline.song_info['title'].replace(' ', '_').replace('/', '_')
+        safe_title = timeline.song_info.title.replace(' ', '_').replace('/', '_')
         output_path = os.path.join(output_dir, f"{safe_title}_lyric_video.mp4")
     
     # Create the video with hard cuts (no transitions)
@@ -270,7 +270,7 @@ def assemble_from_ai_assets(assets_dict: Dict[str, Any], output_path: str = None
     # Create default output path if not provided
     if output_path is None:
         output_dir = os.path.dirname(audio_path)
-        safe_title = timeline.song_info['title'].replace(' ', '_').replace('/', '_')
+        safe_title = timeline.song_info.title.replace(' ', '_').replace('/', '_')
         output_path = os.path.join(output_dir, f"{safe_title}_lyric_video.mp4")
     
     # Create the video with hard cuts (no transitions)

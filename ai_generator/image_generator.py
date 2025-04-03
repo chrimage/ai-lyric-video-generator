@@ -6,8 +6,8 @@ import time
 import random
 import json
 import re
-import collections # Added for deque
-from typing import List, Optional, Dict, Any, Union, Deque # Added Deque type
+import collections
+from typing import List, Optional, Dict, Any, Union
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -19,7 +19,9 @@ from ai_generator.config import (
     GEMINI_IMAGE_RPM # Import the rate limit config
 )
 from ai_generator.prompts import (
-    IMAGE_GENERATION_PROMPT, SAFER_DESCRIPTION_PROMPT, ABSTRACT_IMAGE_PROMPT
+    IMAGE_GENERATION_PROMPT,
+    SAFER_DESCRIPTION_PROMPT,
+    ABSTRACT_IMAGE_PROMPT,
 )
 from ai_generator.utils import retry_api_call, format_text_display, logger
 from lyrics_segmenter import LyricsTimeline, LyricsSegment
@@ -57,7 +59,7 @@ class ImageGenerator:
         self.api_key: Optional[str] = api_key or GEMINI_API_KEY
         self.api: str = AVAILABLE_API
         self.client: Optional[genai.Client] = None # Initialize client attribute
-        self._api_call_timestamps: Deque[float] = collections.deque() # For rate limiting
+        self._last_api_call_end_time: float = 0.0 # Track end time of last call for proactive limiting
 
         # Initialize client only if genai and types are available
         if genai and types:
@@ -165,7 +167,7 @@ class ImageGenerator:
 
         try:
             # Use the existing retry utility for general API call retries
-            return retry_api_call(api_call)
+            return retry_api_call(api_call) # Note: retry_api_call is not defined in this file, assuming it's in utils
         except google_exceptions.PermissionDenied as e:
             logger.error(f"Gemini API call failed due to safety settings: {e}")
             raise # Re-raise safety blocks to be handled by the caller
@@ -177,23 +179,20 @@ class ImageGenerator:
     # Removed generate_image_descriptions, _generate_descriptions_with_gemini,
     # _generate_mock_descriptions, and _parse_numbered_response methods.
 
-    def _apply_rate_limit(self) -> None:
-        """Checks and enforces the API rate limit."""
-        now = time.monotonic()
-        # Remove timestamps older than 60 seconds
-        while self._api_call_timestamps and self._api_call_timestamps[0] < now - 60:
-            self._api_call_timestamps.popleft()
+    def _ensure_request_interval(self) -> None:
+        """Ensures a minimum time interval between API calls for proactive rate limiting."""
+        if GEMINI_IMAGE_RPM <= 0: # Avoid division by zero if RPM is not set or invalid
+            return
 
-        if len(self._api_call_timestamps) >= GEMINI_IMAGE_RPM:
-            time_since_oldest_allowed = now - self._api_call_timestamps[0]
-            wait_time = 60.0 - time_since_oldest_allowed + 0.1 # Add small buffer
-            logger.warning(f"Rate limit ({GEMINI_IMAGE_RPM} RPM) reached. Waiting for {wait_time:.2f} seconds.")
+        target_interval: float = 60.0 / GEMINI_IMAGE_RPM
+        now: float = time.monotonic()
+        elapsed: float = now - self._last_api_call_end_time
+
+        if elapsed < target_interval:
+            wait_time: float = target_interval - elapsed
+            logger.debug(f"Proactive rate limit: Waiting {wait_time:.2f}s to maintain {GEMINI_IMAGE_RPM} RPM.")
             time.sleep(wait_time)
-            # Re-clean timestamps after waiting
-            now = time.monotonic()
-            while self._api_call_timestamps and self._api_call_timestamps[0] < now - 60:
-                 self._api_call_timestamps.popleft()
-
+        # No need to update timestamp here, it's updated after the call completes
 
     def generate_images(self, timeline: LyricsTimeline) -> LyricsTimeline:
         """
@@ -237,18 +236,19 @@ class ImageGenerator:
 
             logger.info(f"Description: {segment.image_description[:100]}...")
 
+            generation_attempted = False
             try:
                 success = False
                 if self.api == "gemini" and self.client and types and google_exceptions:
-                    # --- Rate Limiting Check ---
-                    self._apply_rate_limit()
-                    # ---------------------------
+                    # --- Proactive Rate Limiting ---
+                    self._ensure_request_interval()
+                    # -----------------------------
                     # Call the function that handles API interaction and retries
-                    # Record timestamp *before* the potentially long call
-                    self._api_call_timestamps.append(time.monotonic())
+                    generation_attempted = True # Mark that we are attempting a real call
                     success = self._generate_image_with_gemini(segment.image_description, filepath)
                 else:
                     # Fallback to mock if API is not configured or libs missing
+                    generation_attempted = True # Also mark mock generation as an attempt
                     logger.info("API not configured or libraries missing, using mock generation.")
                     success = self._generate_mock_image(segment.image_description, filepath, segment.text, segment.segment_type)
 
@@ -264,6 +264,7 @@ class ImageGenerator:
                         logger.info(f"Mock image generated as fallback: {filepath}")
 
             except google_exceptions.PermissionDenied as safety_error:
+                generation_attempted = True # Safety block counts as an attempt
                 # Handle safety blocks specifically
                 logger.error(f"Image generation blocked by safety filters for segment {i+1}. Description: '{segment.image_description[:100]}...'")
                 logger.error(f"Safety feedback: {getattr(safety_error, 'errors', 'N/A')}")
@@ -293,16 +294,18 @@ class ImageGenerator:
                     if mock_success: segment.image_path = filepath
 
             except Exception as e:
+                generation_attempted = True # Other errors also count as an attempt
                 # Catch other unexpected errors during the process
                 logger.error(f"Unexpected error generating image for segment {i+1}: {e}", exc_info=True)
                 logger.info("Falling back to mock image due to unexpected error.")
                 mock_success = self._generate_mock_image(segment.image_description, filepath, segment.text, segment.segment_type)
                 if mock_success:
                     segment.image_path = filepath
-
-            # Removed the fixed delay here, rate limiting handles pauses.
-            # Consider if a small minimum delay is still desired.
-            # time.sleep(random.uniform(0.1, 0.3)) # Optional small jitter
+            finally:
+                # Update the timestamp *after* any generation attempt (success, failure, mock, error)
+                # This ensures the interval starts from the end of the last operation.
+                if generation_attempted:
+                    self._last_api_call_end_time = time.monotonic()
 
         return timeline
 
@@ -439,8 +442,8 @@ class ImageGenerator:
 
                     logger.warning(f"API rate limit hit (429). Retrying attempt {retries}/{MAX_API_RETRIES} after {sleep_time:.2f}s...")
                     time.sleep(sleep_time)
-                    # Also apply the general rate limiter check before the next attempt
-                    self._apply_rate_limit()
+                    # No need to apply rate limit again here, it's handled before the call
+                    # self._ensure_request_interval() # Removed redundant call
                     continue # Go to the next iteration of the while loop
                 else:
                     # If it's not a 429 or retries are exhausted, re-raise the exception

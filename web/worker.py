@@ -90,7 +90,7 @@ def process_video_task(task_id: int, config: Config):
             if not song_info:
                 raise ValueError("Song not found.") # Raise specific error
 
-            logger.info(f"Found song: '{song_info['title']}' by {', '.join(song_info['artists'])}")
+            logger.info(f"Found song: '{song_info.title}' by {', '.join(song_info.artists)}")
             dir_mgr = SongDirectory(base_dir=output_base_dir)
             song_dir = dir_mgr.finalize_directory(song_info)
             logger.info(f"Using song directory: {song_dir}")
@@ -112,7 +112,7 @@ def process_video_task(task_id: int, config: Config):
 
             # --- 3. Assemble Video ---
             logger.info("Assembling final video...")
-            safe_title = song_info['title'].replace(' ', '_').replace('/', '_')
+            safe_title = song_info.title.replace(' ', '_').replace('/', '_')
             video_output_path = os.path.join(song_dir, f"{safe_title}_lyric_video.mp4")
             final_video_path = assemble_from_ai_assets(assets, video_output_path)
 
