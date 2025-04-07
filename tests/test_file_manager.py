@@ -9,10 +9,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# Add parent directory to path for importing
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from file_manager import SongDirectory
+# Note: Tests should be run from the project root.
+# Ensure the package is installed (e.g., `pip install -e .`) or PYTHONPATH is set.
+from ai_lyric_video_generator.utils.file_manager import SongDirectory
 
 class TestSongDirectory(unittest.TestCase):
     """Test the SongDirectory class"""
@@ -73,14 +72,18 @@ class TestSongDirectory(unittest.TestCase):
         temp_dir = dir_mgr.temp_dir
         with open(os.path.join(temp_dir, "test.txt"), "w") as f:
             f.write("test")
-            
+
         # Finalize the directory
-        song_info = {
-            'title': 'Final Song',
-            'artists': ['Final Artist']
-        }
-        
-        final_dir = dir_mgr.finalize_directory(song_info)
+        # Import SongInfo here or at the top if not already imported
+        from ai_lyric_video_generator.utils.song_utils import SongInfo
+        # Now that SongInfo defaults album/duration to None, we don't need them here
+        song_info_obj = SongInfo(
+            title='Final Song',
+            artists=['Final Artist'],
+            videoId='testId123' # videoId is required by SongInfo
+        )
+
+        final_dir = dir_mgr.finalize_directory(song_info_obj)
         self.assertIsNotNone(final_dir)
         self.assertTrue(os.path.exists(final_dir))
         
@@ -137,10 +140,11 @@ class TestSongDirectory(unittest.TestCase):
         # Create timeline files to mark as song directories
         with open(os.path.join(self.test_dir.name, "Artist1", "Song1", "timeline_final.json"), "w") as f:
             json.dump({}, f)
-            
-        with open(os.path.join(self.test_dir.name, "Artist2", "Song2", "video_info.json"), "w") as f:
+
+        # Use a valid marker file like timeline_raw.json for the second directory
+        with open(os.path.join(self.test_dir.name, "Artist2", "Song2", "timeline_raw.json"), "w") as f:
             json.dump({}, f)
-            
+
         # Find song directories
         dirs = SongDirectory.find_song_directories(self.test_dir.name)
         

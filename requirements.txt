@@ -1,7 +1,0 @@
-yt-dlp>=2025.2.19
-ytmusicapi>=1.10.2
-moviepy>=1.0.3
-python-dotenv>=1.0.0
-Pillow>=10.0.0
-# Only needed if using Gemini API
-google-generativeai>=0.3.0

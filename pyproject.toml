@@ -1,0 +1,54 @@
+[project]
+name = "ai-lyric-video-generator"
+version = "0.1.0"
+description = "Generates lyric videos using AI for concepts and images."
+readme = "README.md"
+requires-python = ">=3.9" # google-generativeai requires Python 3.9+
+license = { text = "MIT" } # Or specify appropriate license
+authors = [
+  { name = "Your Name", email = "your@email.com" }, # Replace with actual author info if known
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License", # Adjust if needed
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "yt-dlp>=2025.2.19",
+    "ytmusicapi>=1.10.2",
+    "moviepy>=1.0.3",
+    "python-dotenv>=1.0.0",
+    "Pillow>=10.0.0",
+    "google-genai>=1.7.0", # Use the recommended package as per docs/python_genai_guide.md
+    "google-api-core>=2.11.1", # Added dependency for google.api_core
+]
+
+[project.optional-dependencies]
+web = [
+    "Flask>=2.3.3",
+    "Flask-WTF>=1.1.1",
+    "Flask-SQLAlchemy>=3.0.5",
+]
+dev = [
+    # Add development tools like pytest, linters (e.g., ruff) here later
+    "pytest",
+    "ruff",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/ai-lyric-video-generator" # Replace with actual URL
+Repository = "https://github.com/yourusername/ai-lyric-video-generator" # Replace with actual URL
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+# Add ruff configuration if desired
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"] # Example: Enable basic flake8 checks + isort

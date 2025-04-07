@@ -14,95 +14,121 @@ Generate beautiful lyric videos with AI-generated imagery that perfectly matches
 
 ## Installation
 
-1. Clone this repository
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-3. Set your Gemini API key in a `.env` file or environment variable:
-```
-GEMINI_API_KEY=your_api_key_here
-```
-4. Ensure FFmpeg is installed on your system (required for video processing)
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url>
+    cd ai-lyric-video-generator
+    ```
+2.  **Install dependencies:**
+    This project uses `uv` for package management (recommended) or `pip`.
+    ```bash
+    # Using uv (recommended)
+    uv pip install -e .[web] # Install base + web dependencies in editable mode
+
+    # OR using pip
+    pip install -e .[web]
+    ```
+    *   The `[web]` extra installs dependencies needed for the web interface.
+    *   `-e` installs the package in editable mode, which is useful for development.
+3.  **Set API Key:**
+    Create a `.env` file in the project root and add your Gemini API key:
+    ```dotenv
+    GEMINI_API_KEY=your_api_key_here
+    ```
+    Alternatively, set the `GEMINI_API_KEY` environment variable.
+4.  **Install FFmpeg:**
+    Ensure FFmpeg is installed and accessible in your system's PATH. It's required by `moviepy` for video processing. ([FFmpeg Download](https://ffmpeg.org/download.html))
 
 ## Usage
 
-### Generate a complete lyric video:
+A helper script `run.sh` is provided for convenience. Make it executable: `chmod +x run.sh`.
+
+### Command-Line Interface (CLI)
+
+Generate a complete lyric video:
+```bash
+./run.sh cli "Artist - Song Title" [options]
+# Example:
+./run.sh cli "Queen - Bohemian Rhapsody" --verbose
+```
+**CLI Options:**
+*   `--api-key API_KEY`: Override the API key.
+*   `--output OUTPUT_DIR`: Specify the base output directory.
+*   `--verbose` or `-v`: Enable detailed logging.
+
+(See `./run.sh cli --help` for all options inherited from `src/ai_lyric_video_generator/main.py`)
+
+### Web Interface
+
+1.  Ensure web dependencies are installed (using `.[web]` during installation).
+2.  Start the web server:
+    ```bash
+    ./run.sh web [options]
+    # Example: Run on port 8080 in debug mode
+    ./run.sh web --port 8080 --debug
+    ```
+3.  Open your web browser and navigate to `http://localhost:5000` (or the specified port).
+
+(See `./run.sh web --help` for server options inherited from `scripts/run_web_app.py`)
+
+### Running Tests
 
 ```bash
-python main.py "Artist - Song Title"
+./run.sh test [pytest options]
+# Example: Run tests matching 'file_manager'
+./run.sh test -k file_manager
 ```
-
-### Advanced Usage
-
-Generate just the lyrics timeline:
-```bash
-python lyrics_segmenter.py "Artist - Song Title" --output output.json
-```
-
-Generate AI assets only:
-```bash
-python ai_image_generator.py "Artist - Song Title" --api-key YOUR_KEY --output output_dir
-```
-
-Assemble final video from existing assets:
-```bash
-python video_assembler.py --timeline TIMELINE.json --audio AUDIO.mp3 --output OUTPUT.mp4
-```
-
-### Quick Demo
-
-Run the demo script to generate a sample lyric video:
-```bash
-python demo.py
-```
-
-### Command-line options
-
-```
---api-key API_KEY    Gemini API key (can also use GEMINI_API_KEY env variable)
---output OUTPUT_DIR  Directory to save output files
---help               Show help message and exit
-```
-
-## Web Interface (New!)
-
-A new web interface has been added to allow for easier task management and video viewing:
-
-1. Install additional web dependencies:
-```bash
-pip install -r requirements-web.txt
-```
-
-2. Start the web server:
-```bash
-python app.py runserver
-```
-
-3. Open your web browser and navigate to http://localhost:5000
-
-See [WEB_README.md](WEB_README.md) for detailed instructions on setting up and using the web interface.
 
 ## Project Structure
 
-### Directory Structure
-
-The main components of this project are:
+The project follows a standard Python package structure using a `src` layout:
 
 ```
 ai-lyric-video-generator/
-├── main.py                  # Main entry point for the application
-├── lyrics_segmenter.py      # Processes lyrics data to create segmented timeline
-├── ai_image_generator.py    # Creates AI-generated images for lyric segments
-├── video_assembler.py       # Assembles the final video with images and audio
-├── lib/                     # Utility libraries
-│   └── song_utils.py        # Core utilities for song search and lyrics retrieval
-├── demo.py                  # Quick demo script
-├── web/                     # Web interface package
-│   ├── templates/           # HTML templates
-│   └── static/              # Static files (CSS, JS)
-├── app.py                   # Web application entry point
-└── examples/                # Example scripts demonstrating individual components
+├── src/
+│   └── ai_lyric_video_generator/  # Main package
+│       ├── __init__.py
+│       ├── config.py              # Configuration loading
+│       ├── main.py                # Core CLI logic entry point
+│       ├── core/                  # AI generation components
+│       │   ├── __init__.py
+│       │   ├── director.py        # Video concept generation
+│       │   ├── description_generator.py # Image description generation
+│       │   ├── image_generator.py # Image file generation
+│       │   └── prompts/           # AI prompts
+│       ├── utils/                 # Utility functions and classes
+│       │   ├── __init__.py
+│       │   ├── file_manager.py    # Directory/file handling
+│       │   ├── lyrics_segmenter.py # Lyrics processing and timeline creation
+│       │   ├── song_utils.py      # Song search, download, lyrics API
+│       │   └── utils.py           # General helper functions (logging, retry)
+│       ├── video/                 # Video assembly logic
+│       │   ├── __init__.py
+│       │   └── video_assembler.py # Uses moviepy to create video
+│       └── web/                   # Flask web application package
+│           ├── __init__.py        # App factory
+│           ├── models.py          # Database models
+│           ├── routes.py          # Web routes (UI and API)
+│           ├── worker.py          # Background task processing
+│           ├── config.py          # Web specific config (loaded by main config)
+│           ├── static/            # CSS, JS, images
+│           └── templates/         # HTML templates
+├── scripts/
+│   └── run_web_app.py         # Script to launch the Flask web server
+├── tests/                     # Unit tests
+│   ├── __init__.py
+│   ├── test_*.py
+│   └── run_tests.py           # Basic test runner (pytest recommended)
+├── examples/                  # Example scripts
+├── docs/                      # Documentation files
+├── output/                    # Default output directory (ignored by git)
+├── downloads/                 # Default audio download directory (ignored by git)
+├── instance/                  # Flask instance folder (for DB, ignored by git)
+├── .env                       # Environment variables (ignored by git)
+├── .gitignore
+├── pyproject.toml             # Project metadata and dependencies (PEP 621)
+├── run.sh                     # Convenience runner script
+└── README.md                  # This file
 ```
 
 ### Output Structure

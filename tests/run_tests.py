@@ -6,8 +6,9 @@ import os
 import sys
 import unittest
 
-# Add parent directory to path for importing
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Note: With a src layout, tests should be run from the project root
+# using a test runner like pytest or 'python -m unittest discover tests'.
+# The sys.path manipulation is removed as it's not standard practice.
 
 if __name__ == "__main__":
     # Find all test files
